@@ -14,8 +14,8 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", help="number of iterations to run on", type=int, default=10000)
-parser.add_argument("--gpus", help="Number of GPUs to run on", type=int, default=2)
-parser.add_argument("--lr", help="starting lr", type=float, default=1e-1)
+parser.add_argument("--gpus", help="Number of GPUs to run on", type=int, default=1)
+parser.add_argument("--lr", help="starting lr", type=float, default=1e-2)
 parser.add_argument("--batch", help="batch-size", type=int, default=6)
 parser.add_argument("--eval", help="Just put to keep constistency with original model (rgb)", type=str, default='rgb')
 parser.add_argument("--trainlist", help="Training file list", type=str, default='../list/trainlist01.txt')
@@ -131,17 +131,6 @@ class mod_I3D(torch.nn.Module):
         return out, out_logits
 
 
-# def accuracy(output, target):
-    # """Computes the precision@k for the specified values of k"""
-    # true_label = target
-    # top1_predicted_label = np.argmax(output, axis=1)
-    # corr = len(np.where(true_label == top1_predicted_label)[0])
-    # acc = (float(corr)/ len(true_label)) * 100.0
-    # print("True_labels: ",true_label)
-    # print("Top1: ",top1_predicted_label)
-    # print("Correct: ",corr)
-    # return acc
-
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
@@ -154,7 +143,6 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
-
 
 
 def get_set_loader():
@@ -175,10 +163,10 @@ def get_set_loader():
         [transforms.Resize([new_height, new_width]), transforms.CenterCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality='RGB', transform=train_transform)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=8)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=4)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality='RGB', transform=test_transform)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_BATCH_SIZE*4, shuffle=True, num_workers=8)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_BATCH_SIZE*4, shuffle=True, num_workers=4)
 
     return train_loader, test_loader
 
@@ -211,6 +199,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
         print("Epoch Number: %d" % (j + 1))
         # get_test_accuracy(model, test_loader)
+        scheduler.step()
         for i, (input_3d, target) in enumerate(train_loader):
 
             # print("Input shape: ",input_3d.size())
@@ -228,9 +217,10 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             loss = criterion(logits, target)
             avg_loss.update(loss)
 
-            print("Step: [%d / %d], Training Loss: %0.5f, Average: %0.5f" % (i + 1, len(train_loader), loss, avg_loss.avg))
+            print("Epoch: %d, Step: [%d / %d], Training Loss: %0.5f, Average: %0.5f" % (j+1, i+1, train_points, loss, avg_loss.avg))
 
             train_writer.add_scalar('Loss', loss, global_step)
+            train_writer.add_scalar('Avg Loss', avg_loss.avg, global_step)
             loss.backward()
 
             for name, param in model.named_parameters():
@@ -239,14 +229,14 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
                     train_writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step)
                     train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
 
-            if test_loader is not None and global_step % int(train_points/3) == 0:
+            if test_loader is not None and global_step % int(train_points/2) == 0:
                 get_test_accuracy(model, test_loader)
 
             optimizer.step()
 
             global_step += 1
 
-        scheduler.step(avg_loss.avg)
+        # scheduler.step(avg_loss.avg)
     get_test_accuracy(model, test_loader)
     train_writer.close()
 
@@ -261,6 +251,9 @@ def main():
     train_loader, test_loader = get_set_loader()
 
     model = mod_I3D()
+    if _NUM_GPUS > 1:
+        model = torch.nn.DataParallel(model)
+
     print_learnables(model)
     model.train()
     model.cuda()
@@ -268,7 +261,8 @@ def main():
     # with cross entropy loss we don't require to compute softmax, nor do we need one-hot encodings
     loss = torch.nn.CrossEntropyLoss()
     sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd,'min',patience=2,verbose=True,threshold=0.0001)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd,'min',patience=2,verbose=True,threshold=0.0001)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,5])
     writer = SummaryWriter(_LOGDIR)
     run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
     print("Logged in: ",_LOGDIR)
