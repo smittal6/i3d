@@ -46,7 +46,10 @@ class modI3D(torch.nn.Module):
         if transform:
             self.adapt(in_channels=self.in_channels)
 
-        if finetune is not True:
+
+
+        if finetune is False:
+            print("Setting grads as false")
             self.set_grads_false()
 
     def adapt(self, in_channels=3, mean=False):

@@ -40,6 +40,7 @@ _MODALITY = args.modality
 _FT = args.ft
 eval_type = args.eval
 
+print("Finetune: ",str(_FT))
 if _FT:
     _LOGDIR = '../ftlogs/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 else:
@@ -104,7 +105,6 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             train_writer.add_scalar('Avg Loss', avg_loss.avg, global_step)
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
 
             if global_step % int(train_points/6) == 0:
                 for name, param in model.named_parameters():
@@ -116,6 +116,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             if test_loader is not None and global_step % int(train_points/2) == 0:
                 get_test_accuracy(model, test_loader)
 
+            optimizer.zero_grad()
 
             global_step += 1
 
@@ -140,7 +141,7 @@ def main():
     loss = torch.nn.CrossEntropyLoss()
     sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd,'min',patience=2,verbose=True,threshold=0.0001)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,5])
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[3,7])
     writer = SummaryWriter(_LOGDIR)
     run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
     print("Logged in: ",_LOGDIR)
