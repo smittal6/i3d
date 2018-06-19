@@ -40,7 +40,10 @@ _MODALITY = args.modality
 _FT = args.ft
 eval_type = args.eval
 
-_LOGDIR = '../logs/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+if _FT:
+    _LOGDIR = '../ftlogs/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+else:
+    _LOGDIR = '../logs/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 
 
 def get_set_loader():
@@ -79,7 +82,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
     for j in range(_EPOCHS):
 
         print("Epoch Number: %d" % (j + 1))
-        get_test_accuracy(model, test_loader)
+        # get_test_accuracy(model, test_loader)
         scheduler.step()
         for i, (input_3d, target) in enumerate(train_loader):
 
@@ -105,7 +108,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
             if global_step % int(train_points/6) == 0:
                 for name, param in model.named_parameters():
-                    if param.requires_grad and param.grad != None:
+                    if param.requires_grad and param.grad is not None:
                         # print("Histogram for[Name]: ",name)
                         train_writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step)
                         train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
