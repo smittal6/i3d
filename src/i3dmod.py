@@ -1,5 +1,7 @@
 import torch
 import math
+import numpy as np
+
 from i3dpt import I3D
 from i3dpt import Unit3Dpy
 
@@ -13,7 +15,10 @@ class modI3D(torch.nn.Module):
         self.num_c = num_c
 
         # Initialize pytorch I3D
-        self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=modality)
+        if modality=='dsc':
+            self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality='flow')
+        else:
+            self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=modality)
         # Can't change the classes because weight loading will cause issues.
 
         # Define the final layers
@@ -47,10 +52,12 @@ class modI3D(torch.nn.Module):
             self.adapt(in_channels=self.in_channels)
 
 
-
         if finetune is False:
             print("Setting grads as false")
             self.set_grads_false()
+
+        self.i3d.cuda()
+        print("Pretrained i3D shifted to CUDA")
 
     def adapt(self, in_channels=3, mean=False):
         '''
@@ -70,21 +77,24 @@ class modI3D(torch.nn.Module):
             new_weight_3d = new_weight_3d * old_inchannels / in_channels
         else:
             trans = []
+            const = 2*math.pi/8.0
             for i in range(8):
                 tup = [math.cos(i * const), math.sin(i * const)]
                 trans.append(tup)
 
             # x component is the first
-            trans = np.asarray(trans)
+            trans = torch.from_numpy(np.asarray(trans))
             # Shape of this is (8,2)
 
             sizes = weight_3d.size()
-            for k_num in sizes[0]:
+            for k_num in range(sizes[0]):
                 for i in range(sizes[2]):
                     for j in range(sizes[3]):
                         for k in range(sizes[4]):
                             # : in new_weight_3d will represent the 8 channels
-                            new_weight_3d[k_num,:,i,j,k] = torch.mm(trans,weight_3d[k_num,:,i,j,k].unsqueeze(1))
+                            new_weight_3d[k_num,:,i,j,k] = torch.mm(trans,weight_3d[k_num,:,i,j,k].unsqueeze(1).double())
+
+            print("New weight shape: ",new_weight_3d.size())
 
         if old_inchannels != in_channels:
             conv3d_1a_7x7 = Unit3Dpy(
@@ -93,7 +103,7 @@ class modI3D(torch.nn.Module):
                 kernel_size=(7, 7, 7),
                 stride=(2, 2, 2),
                 padding='SAME')
-            conv3d_1a_7x7.weight = nn.parameter.Parameter(new_weight_3d)
+            conv3d_1a_7x7.weight = torch.nn.parameter.Parameter(new_weight_3d)
             self.i3d.conv3d_1a_7x7 = conv3d_1a_7x7
 
         print("Weights Transformed")
@@ -106,8 +116,6 @@ class modI3D(torch.nn.Module):
 
         # print("Shape of weights: ",self.i3d.conv3d_1a_7x7.conv3d.weight.data.size())
         # i3nception_pt.train()
-        self.i3d.cuda()
-        print("Pretrained i3D shifted to CUDA")
 
     def set_grads_false(self):
         for name, param in self.i3d.named_parameters():

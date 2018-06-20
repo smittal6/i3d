@@ -7,6 +7,8 @@ import os.path
 import numpy as np
 from numpy.random import randint
 
+from ReichardtDS8 import *
+
 
 class VideoRecord(object):
     def __init__(self, row):
@@ -55,9 +57,9 @@ class TSNDataSet(data.Dataset):
 
     def _load_image(self, directory, idx):
         if self.modality == 'rgb' or self.modality == 'RGBDiff' or self.modality == 'RGBEDR' or self.modality == 'MulEDR':
-            # print(os.path.join(directory, self.image_tmpl.format(idx)))
             return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('RGB')]
-        elif self.modality == 'EDR' or self.modality == 'GrayDiff':
+        elif self.modality == 'EDR' or self.modality == 'GrayDiff' or self.modality == 'dsc':
+            # Grayscale
             return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('L')]
         elif self.modality == 'flow':
             x_img = Image.open(os.path.join(directory, self.image_tmpl.format('x', idx))).convert('L')
@@ -130,7 +132,17 @@ class TSNDataSet(data.Dataset):
             process_data.append(temp)
 
         out = torch.stack(process_data,dim=0).transpose(0,1)
-        # print("out shape: ",out.shape)
+
+        # print("out shape before dsc: ",out.size()) # {3,64,224,224}
+        
+        if self.modality == 'dsc':
+            out = out.numpy()
+            # This is a tuple right now
+            vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4 = Reichardt8(out.transpose(1,2,3,0))
+            out = np.concatenate((vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4), axis=-1)
+            out = torch.from_numpy(out).permute(3,0,1,2)
+            # print("out shape: ",out.size())
+        
         return out, record.label
 
     def __len__(self):

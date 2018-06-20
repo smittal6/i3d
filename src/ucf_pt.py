@@ -9,15 +9,15 @@ from i3dmod import modI3D
 from utils import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epochs", help="number of iterations to run on", type=int, default=100)
-parser.add_argument("--gpus", help="Number of GPUs to run on", type=int, default=1)
+parser.add_argument("--epochs", help="number of iterations", type=int, default=100)
+parser.add_argument("--gpus", help="Number of GPUs", type=int, default=1)
 parser.add_argument("--lr", help="starting lr", type=float, default=1e-2)
 parser.add_argument("--numw", help="number of workers on loading data", type=int, default=4)
 parser.add_argument("--batch", help="batch-size", type=int, default=6)
 parser.add_argument("--testbatch", help="test batch-size", type=int, default=6)
 parser.add_argument("--trainlist", help="Training file list", type=str, default='../list/trainlist01.txt')
 parser.add_argument("--testlist", help="Testing file list", type=str, default='../list/protestlist01.txt')
-parser.add_argument('--modality', type=str, default='rgb', help='RGB vs Flow')
+parser.add_argument('--modality', type=str, default='rgb', help='rgb or dsc or flow')
 parser.add_argument('--resume', type=str, default=None, help='Resume training from this file')
 parser.add_argument('--ft', type=bool, default=False, help='Finetune the model or not')
 parser.add_argument('--sched', type=str, default=False, help='Use a scheduler or not')
@@ -46,9 +46,9 @@ eval_type = args.eval
 
 print("Finetune: ",str(_FT))
 if _FT:
-    _LOGDIR = '../ftlogs/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+    _LOGDIR = '../ftlogs/' + _MODALITY + '/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 else:
-    _LOGDIR = '../logs/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+    _LOGDIR = '../logs/' + _MODALITY + '/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 
 
 def get_set_loader():
@@ -63,8 +63,12 @@ def get_set_loader():
     new_width = int(float(i_w) / ratio)
     new_height = int(float(i_h) / ratio)
 
-    train_transform = transforms.Compose(
-        [transforms.Resize([new_height, new_width]), transforms.RandomCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
+    if _MODALITY != 'dsc':
+        train_transform = transforms.Compose(
+            [transforms.Resize([new_height, new_width]), transforms.RandomCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
+    else:
+        train_transform = transforms.Compose(
+            [transforms.Resize([new_height, new_width]), transforms.CenterCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
 
     test_transform = transforms.Compose(
         [transforms.Resize([new_height, new_width]), transforms.CenterCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
@@ -78,7 +82,6 @@ def get_set_loader():
     return train_loader, test_loader
 
 def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None, test_writer=None):
-    # Load data
 
     avg_loss = AverageMeter()
 
@@ -127,9 +130,11 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
             if test_loader is not None and global_step % int(train_points/2) == 0:
                 acc = get_test_accuracy(model, test_loader)
-                if acc > best_prec1:
-                    print("Saving the model [The best]")
-                    best_prec1 = acc
+                # print("best_prec1: ",best_prec1)
+                # print("Type of acc.data: ",type(acc.data[0]))
+                if acc.data[0] > best_prec1:
+                    print("Saving this model as the best.")
+                    best_prec1 = acc.data[0]
                     save_checkpoint(args, {'epoch': j + 1,
                                      'state_dict': model.state_dict(),
                                      'best_prec1': best_prec1}, True)
@@ -176,7 +181,6 @@ def main():
     writer = SummaryWriter(_LOGDIR)
     run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
     print("Logged in: ",_LOGDIR)
-    # run(model, train_loader, loss, sgd, writer)
 
 
 if __name__ == '__main__':
