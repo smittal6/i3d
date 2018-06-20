@@ -2,6 +2,7 @@ from dataset import TSNDataSet
 from tqdm import tqdm
 import numpy as np
 import torch
+import shutil
 import torchvision.transforms as transforms
 
 class AverageMeter(object):
@@ -53,7 +54,6 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
-
 def get_test_accuracy(model, test_loader):
     # print("Obtaining the test accuracy now")
 
@@ -68,5 +68,11 @@ def get_test_accuracy(model, test_loader):
 
     print("--------\t\t\t Test Accuracy: %0.5f " % np.mean(accs))
     model.train()
+    return np.mean(accs)
 
-
+def save_checkpoint(args, state, is_best, filename='checkpoint_4B.pth.tar'):
+    filename = '_'.join((args.modality.lower(), filename))
+    torch.save(state, filename)
+    if is_best:
+        best_name = '_'.join((args.modality.lower(), 'model_best_4B.pth.tar'))
+        shutil.copyfile(filename, best_name)

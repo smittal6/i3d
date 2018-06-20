@@ -163,10 +163,10 @@ def get_set_loader():
     test_transform = transforms.Compose(
         [transforms.Resize([new_height, new_width]), transforms.CenterCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
 
-    train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality='RGB', transform=train_transform)
+    train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality='rgb', transform=train_transform)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=8)
 
-    test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality='RGB', transform=test_transform)
+    test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality='rgb', transform=test_transform)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=8)
 
     return train_loader, test_loader
@@ -175,7 +175,6 @@ def get_set_loader():
 def get_test_accuracy(model,test_loader):
 
     # print("Obtaining the test accuracy now")
-    
     model.eval()
     accs = []
     for i, (test, labels) in enumerate(tqdm(test_loader)):
@@ -226,11 +225,11 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             train_writer.add_scalar('Avg Loss', avg_loss.avg, global_step)
             loss.backward()
 
-            for name, param in model.named_parameters():
-                if param.requires_grad and param.grad is not None:
+            # for name, param in model.named_parameters():
+                # if param.requires_grad and param.grad is not None:
                     # print("Histogram for[Name]: ",name)
-                    train_writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step)
-                    train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
+                    # train_writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step)
+                    # train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
 
             if test_loader is not None and global_step % int(train_points/2) == 0:
                 get_test_accuracy(model, test_loader)

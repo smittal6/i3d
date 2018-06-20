@@ -2,13 +2,14 @@
 
 import argparse
 import torch
+import time
 
 from tensorboardX import SummaryWriter
 from i3dmod import modI3D
 from utils import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--epochs", help="number of iterations to run on", type=int, default=10000)
+parser.add_argument("--epochs", help="number of iterations to run on", type=int, default=100)
 parser.add_argument("--gpus", help="Number of GPUs to run on", type=int, default=1)
 parser.add_argument("--lr", help="starting lr", type=float, default=1e-2)
 parser.add_argument("--numw", help="number of workers on loading data", type=int, default=4)
@@ -17,7 +18,9 @@ parser.add_argument("--testbatch", help="test batch-size", type=int, default=6)
 parser.add_argument("--trainlist", help="Training file list", type=str, default='../list/trainlist01.txt')
 parser.add_argument("--testlist", help="Testing file list", type=str, default='../list/protestlist01.txt')
 parser.add_argument('--modality', type=str, default='rgb', help='RGB vs Flow')
-parser.add_argument('--ft', type=str, default=False, help='Finetune the model or not')
+parser.add_argument('--resume', type=str, default=None, help='Resume training from this file')
+parser.add_argument('--ft', type=bool, default=False, help='Finetune the model or not')
+parser.add_argument('--sched', type=str, default=False, help='Use a scheduler or not')
 parser.add_argument("--eval", help="Just put to keep constistency with original model (rgb)", type=str, default='rgb')
 
 # ../model/model_rgb.pth
@@ -32,6 +35,7 @@ _TEST_BATCH_SIZE = args.testbatch
 _NUM_GPUS = args.gpus
 _EPOCHS = args.epochs
 _LEARNING_RATE = args.lr
+_USE_SCHED = args.sched
 _TRAIN_LIST = args.trainlist
 _TEST_LIST = args.testlist
 _TEST_FREQ = 20
@@ -78,28 +82,35 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
     avg_loss = AverageMeter()
 
+    best_prec1 = 0.0
+
     global_step = 1
     train_points = len(train_loader)
     for j in range(_EPOCHS):
 
         print("Epoch Number: %d" % (j + 1))
         # get_test_accuracy(model, test_loader)
-        scheduler.step()
+        if scheduler is not None:
+            scheduler.step()
+            for param_group in optimizer.param_groups:
+                print("Learning Rate: ",param_group['lr'])
+
         for i, (input_3d, target) in enumerate(train_loader):
 
             # print("Input shape: ",input_3d.size())
             # print("Target shape: ",target.size())
 
             # Prepare data for pytorch forward pass
+            start = time.time()
             input_3d_var = torch.autograd.Variable(input_3d.cuda())
             target = torch.autograd.Variable(target.cuda())
 
             # Pytorch forward pass
             out_pt, logits = model(input_3d_var)
             loss = criterion(logits, target)
-            avg_loss.update(loss)
+            avg_loss.update(loss.data[0])
 
-            print("Epoch: %d, Step: [%d / %d], Training Loss: %0.5f, Average: %0.5f" % (j+1, i+1, train_points, loss, avg_loss.avg))
+            print("Epoch: %d, Step: [%d / %d], Training Loss: %0.5f, Average: %0.5f, Time: %0.5f" % (j+1, i+1, train_points, loss.data[0], avg_loss.avg, time.time()-start))
 
             train_writer.add_scalar('Loss', loss, global_step)
             train_writer.add_scalar('Avg Loss', avg_loss.avg, global_step)
@@ -107,6 +118,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             optimizer.step()
 
             if global_step % int(train_points/6) == 0:
+                print("Storing the gradients for Tensorboard")
                 for name, param in model.named_parameters():
                     if param.requires_grad and param.grad is not None:
                         # print("Histogram for[Name]: ",name)
@@ -114,10 +126,15 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
                         train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
 
             if test_loader is not None and global_step % int(train_points/2) == 0:
-                get_test_accuracy(model, test_loader)
-
+                acc = get_test_accuracy(model, test_loader)
+                if acc > best_prec1:
+                    print("Saving the model [The best]")
+                    best_prec1 = acc
+                    save_checkpoint(args, {'epoch': j + 1,
+                                     'state_dict': model.state_dict(),
+                                     'best_prec1': best_prec1}, True)
+            
             optimizer.zero_grad()
-
             global_step += 1
 
         # scheduler.step(avg_loss.avg)
@@ -133,15 +150,29 @@ def main():
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
 
+    if args.resume:
+        if os.path.isfile(args.resume):
+            print("=> loading checkpoint '{}'".format(args.resume))
+            checkpoint = torch.load(args.resume)
+            args.start_epoch = checkpoint['epoch']
+            best_prec1 = checkpoint['best_prec1']
+            model.load_state_dict(checkpoint['state_dict'])
+            #optimizer.load_state_dict(checkpoint['optimizer'])
+            print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
+
     print_learnables(model)
     model.train()
     model.cuda()
 
     # with cross entropy loss we don't require to compute softmax, nor do we need one-hot encodings
     loss = torch.nn.CrossEntropyLoss()
-    sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9)
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd,'min',patience=2,verbose=True,threshold=0.0001)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[3,7])
+    sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
+    if _USE_SCHED:
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd,'min',patience=2,verbose=True,threshold=0.0001)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,8])
+    else:
+        scheduler = None
+
     writer = SummaryWriter(_LOGDIR)
     run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
     print("Logged in: ",_LOGDIR)
