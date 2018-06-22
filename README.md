@@ -9,13 +9,14 @@ I3D Models for UCF-101
 |--------|---------|---------|
 | --epochs | 100 | . |
 | --gpus | 1 | . |
-| --lr | 0.01 | . |
-| --numw | 4 | . |
+| --lr | 0.01 | starting lr |
+| --numw | 8 | . |
 | --batch | 6 | . |
 | --testbatch | 6 | Test batch size |
 | --trainlist | ../list/trainlist01.txt | trainlist |
 | --testlist | ../list/protestlist01.txt | testlist |
-| --modality | rgb | rgb or flow model |
+| --modality | rgb | rgb or flow or rgbdsc or flowdsc |
+| --wts | rgb | which weights to load | 
 | --ft | False | Finetune or not |
 | --sched | False | Use a scheduler or not |
 
