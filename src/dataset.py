@@ -3,6 +3,7 @@ import torch
 
 from PIL import Image
 import os
+import math
 import os.path
 import numpy as np
 from numpy.random import randint
@@ -11,13 +12,15 @@ from ReichardtDS8 import *
 
 
 class VideoRecord(object):
-    def __init__(self, row):
+    def __init__(self, row, modality):
         self._data = row
 
         for parent, dirnames, filenames in os.walk(self._data[0]):
             filenames = [f for f in filenames if '.avi' not in f]
 
         self.len = len(filenames)
+        if modality == 'flowdsc' or modality == 'flow':
+            self.len = int(self.len/3) # 3 to account for img_, and 2 X flow_
 
     @property
     def path(self):
@@ -55,21 +58,35 @@ class TSNDataSet(data.Dataset):
 
         self._parse_list()
 
+        if self.modality == 'rgbdsc' or 'flowdsc':
+            trans = []
+            const = 2*math.pi/8.0
+            for i in range(8):
+                tup = [math.cos(i * const), math.sin(i * const)]
+                trans.append(tup)
+
+            # x component is the first
+            self.basis = torch.from_numpy(np.asarray(trans)) # 8 rows and 2 columns
+
     def _load_image(self, directory, idx):
         if self.modality == 'rgb' or self.modality == 'RGBDiff' or self.modality == 'RGBEDR' or self.modality == 'MulEDR':
             return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('RGB')]
-        elif self.modality == 'EDR' or self.modality == 'GrayDiff' or self.modality == 'dsc':
+        elif self.modality == 'EDR' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc':
             # Grayscale
             return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('L')]
-        elif self.modality == 'flow':
+        elif self.modality == 'flow' or self.modality == 'flowdsc':
             x_img = Image.open(os.path.join(directory, self.image_tmpl.format('x', idx))).convert('L')
             y_img = Image.open(os.path.join(directory, self.image_tmpl.format('y', idx))).convert('L')
+            # print("res's shape:", res.shape)
+            # res = np.stack((x_img, y_img))
+            # print(res.shape)
 
             return [x_img, y_img]
+            # return res
 
     def _parse_list(self):
         print("Parsing list now")
-        self.video_list = [VideoRecord(x.strip().split(' ')) for x in open(self.list_file)]
+        self.video_list = [VideoRecord(x.strip().split(' '), self.modality) for x in open(self.list_file)]
 
     def _sample_indices(self, record):
         """
@@ -113,6 +130,7 @@ class TSNDataSet(data.Dataset):
         else:
             segment_indices = self._get_test_indices(record)
 
+        # print("Getting the items finally")
         return self.get(record, segment_indices)
 
     def get(self, record, indices):
@@ -126,24 +144,31 @@ class TSNDataSet(data.Dataset):
                 if p < record.num_frames:
                     p += 1
 
-        process_data = []
-        for img in images:
-            temp = self.transform(img) # len(images) = num_seg * data_length i.e. 7*6 =24
-            process_data.append(temp)
+        process_data = self.transform(images)
+        # print("size after processing: ",process_data.size())
 
-        out = torch.stack(process_data,dim=0).transpose(0,1)
+        # This is for applying the common transforms
+        # process_data = []
+        # for img in images:
+            # temp = self.transform(img) # len(images) = num_seg * data_length i.e. 7*6 =24
+            # print("temp's size: ",temp.size())
+            # process_data.append(temp)
 
-        # print("out shape before dsc: ",out.size()) # {3,64,224,224}
-        
-        if self.modality == 'dsc':
+        # now depending on the modalilty of input, apply either Reichardt, or simple transform
+        if self.modality == 'rgbdsc':
             out = out.numpy()
             # This is a tuple right now
             vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4 = Reichardt8(out.transpose(1,2,3,0))
             out = np.concatenate((vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4), axis=-1)
-            out = torch.from_numpy(out).permute(3,0,1,2)
+            process_data = torch.from_numpy(out).permute(3,0,1,2)
             # print("out shape: ",out.size())
         
-        return out, record.label
+        elif self.modality == 'flowdsc':
+            process_data = torch.matmul(self.basis, process_data.double().permute(1,2,0,3))
+            process_data = process_data.permute(2,0,1,3).float()
+        
+        # print("processed data size: ",process_data.size())
+        return process_data, record.label
 
     def __len__(self):
         return len(self.video_list)

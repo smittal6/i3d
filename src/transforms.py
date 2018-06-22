@@ -266,6 +266,7 @@ class Stack(object):
                 for i in range(int(len(img_group)/2)):
 
                     t1 = np.expand_dims(np.stack((img_group[2*i],img_group[2*i + 1]),axis=2),0)
+                    # Stack the two dx and dy channels at the end
                     img_list.extend(t1)
 
                 res = np.stack(img_list, axis=0)
@@ -275,8 +276,9 @@ class Stack(object):
             if self.roll:
                 return np.concatenate([np.array(x)[:, :, ::-1] for x in img_group], axis=2)
             else:
+                # RGB is at the end
                 temp = np.stack(img_group, axis=0)
-                print(temp.shape)
+                # print(temp.shape)
                 return temp
 
 
