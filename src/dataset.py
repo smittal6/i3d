@@ -77,12 +77,8 @@ class TSNDataSet(data.Dataset):
         elif self.modality == 'flow' or self.modality == 'flowdsc':
             x_img = Image.open(os.path.join(directory, self.image_tmpl.format('x', idx))).convert('L')
             y_img = Image.open(os.path.join(directory, self.image_tmpl.format('y', idx))).convert('L')
-            # print("res's shape:", res.shape)
-            # res = np.stack((x_img, y_img))
-            # print(res.shape)
 
             return [x_img, y_img]
-            # return res
 
     def _parse_list(self):
         print("Parsing list now")
@@ -147,21 +143,17 @@ class TSNDataSet(data.Dataset):
         process_data = self.transform(images)
         # print("size after processing: ",process_data.size())
 
-        # This is for applying the common transforms
-        # process_data = []
-        # for img in images:
-            # temp = self.transform(img) # len(images) = num_seg * data_length i.e. 7*6 =24
-            # print("temp's size: ",temp.size())
-            # process_data.append(temp)
-
         # now depending on the modalilty of input, apply either Reichardt, or simple transform
         if self.modality == 'rgbdsc':
-            out = out.numpy()
+
+            out = process_data.numpy()
+            # print("out's shape : ",out.shape)
             # This is a tuple right now
             vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4 = Reichardt8(out.transpose(1,2,3,0))
+            # print("vp1's shape : ",vp1.shape)
             out = np.concatenate((vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4), axis=-1)
             process_data = torch.from_numpy(out).permute(3,0,1,2)
-            # print("out shape: ",out.size())
+            # print("process_data: ",process_data.size())
         
         elif self.modality == 'flowdsc':
             process_data = torch.matmul(self.basis, process_data.double().permute(1,2,0,3))

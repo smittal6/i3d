@@ -260,17 +260,24 @@ class Stack(object):
 
         if img_group[0].mode == 'L':
 
-            if self.modality != 'rgb':
+            if self.modality == 'flow' or self.modality == 'flowdsc':
 
                 img_list = []
-                for i in range(int(len(img_group)/2)):
 
+                for i in range(int(len(img_group)/2)):
                     t1 = np.expand_dims(np.stack((img_group[2*i],img_group[2*i + 1]),axis=2),0)
                     # Stack the two dx and dy channels at the end
                     img_list.extend(t1)
 
                 res = np.stack(img_list, axis=0)
                 return res
+
+            elif self.modality == 'rgbdsc':
+                res = np.stack(img_group, axis=0)
+                res = np.expand_dims(res,3)
+                # print("rgbdsc in stack: ",res.shape)
+                return res
+
 
         elif img_group[0].mode == 'RGB':
             if self.roll:
