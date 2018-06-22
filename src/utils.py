@@ -38,7 +38,7 @@ class PixRescaler(object):
 def print_learnables(model):
     for name, param in model.named_parameters():
         if param.requires_grad:
-            print("Learning for: ", name)
+            print("Learning for: %s, Params: %d"%(name,np.prod(param.size())))
 
 
 def accuracy(output, target, topk=(1,)):

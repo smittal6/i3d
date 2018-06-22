@@ -8,6 +8,7 @@ test_file = '../list/testlist01.txt'
 
 def main():
 
+    # get the class names and store in dictionary
     dict_name = {}
     with open(class_file) as w:
         tmp = [line.rstrip('\n') for line in w]
@@ -18,8 +19,6 @@ def main():
             # print("M: %s, N: %d"%(m,int(n)))
             dict_name[m] = int(n)
 
-    # category = []
-    # pass
 
     prepend = '/mnt/data1/UCF-101/'
     with open(test_file) as w:

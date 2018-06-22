@@ -8,17 +8,15 @@ from i3dpt import Unit3Dpy
 
 class modI3D(torch.nn.Module):
 
-    def __init__(self, modality='rgb', num_c=101, finetune=False, dropout_prob=0.5):
+    def __init__(self, modality='rgb', weights='rgb', mean=False, num_c=101, finetune=False, dropout_prob=0.5):
 
         super(modI3D, self).__init__()
 
         self.num_c = num_c
+        self.mean = mean
 
         # Initialize pytorch I3D
-        if modality=='dsc':
-            self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality='flow')
-        else:
-            self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=modality)
+        self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=weights)
         # Can't change the classes because weight loading will cause issues.
 
         # Define the final layers
@@ -35,22 +33,34 @@ class modI3D(torch.nn.Module):
 
         transform = False
 
+
+        if weights == 'rgb':
+            self.path = '../model/model_rgb.pth'
+        else:
+            self.path = '../model/model_flow.pth'
+
+
         if modality == 'rgb':
             self.in_channels = 3
-            self.path = '../model/model_rgb.pth'
+
         elif modality == 'flow':
             self.in_channels = 2
-            self.path = '../model/model_flow.pth'
-        elif modality == 'dsc':
+
+        elif modality == 'rgbdsc':
             self.in_channels = 8
-            self.path = '../model/model_flow.pth'
+            transform = True
+
+        elif modality == 'flowdsc':
+            self.in_channels = 8
             transform = True
 
         self.load_weights(self.path)
 
-        if transform:
-            self.adapt(in_channels=self.in_channels)
+        if weights == 'rgb':
+            self.mean = True
 
+        if transform:
+            self.adapt(self.in_channels,self.mean)
 
         if finetune is False:
             print("Setting grads as false")
