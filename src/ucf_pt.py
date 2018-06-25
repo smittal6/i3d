@@ -3,6 +3,7 @@
 import argparse
 import torch
 import time
+import sys
 
 from tensorboardX import SummaryWriter
 from i3dmod import modI3D
@@ -47,6 +48,7 @@ _MODALITY = args.modality
 _WTS = args.wts
 _FT = args.ft
 eval_type = args.eval
+
 
 # dsc1 uses rgb weights with mean, while dsc2 uses flow weights with either mean or transformation
 print("Finetune: ",str(_FT))
@@ -101,10 +103,13 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
     avg_loss = AverageMeter()
     train_acc = AverageMeter()
 
-    best_prec1 = 0.0
 
-    global_step = 1
     train_points = len(train_loader)
+    global j
+    global global_step
+    global best_prec1
+    global_step = 1
+    best_prec1 = 0.0
     for j in range(_EPOCHS):
 
         print("Epoch Number: %d" % (j + 1))
@@ -143,7 +148,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             loss.backward()
             optimizer.step()
 
-            if global_step % int(train_points/6) == 0:
+            if global_step % int(train_points/4) == 0:
                 print("Storing the gradients for Tensorboard")
                 for name, param in model.named_parameters():
                     if param.requires_grad and param.grad is not None:
@@ -171,6 +176,10 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
 
 def main():
+    global j
+    global global_step
+    global best_prec1
+
     train_loader, test_loader = get_set_loader()
 
     # args order: modality, num_c, finetune, dropout
@@ -202,7 +211,39 @@ def main():
         scheduler = None
 
     writer = SummaryWriter(_LOGDIR)
-    run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
+
+    try:
+        run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
+    except KeyboardInterrupt:
+        answer = input("Do you want to save the model and the current running statistics? [y or n]\n")
+        if answer == 'y':
+
+            # find the accuracy before shutting
+            acc = get_test_accuracy(model, test_loader)
+
+            # model saving 
+            if acc.data[0] > best_prec1:
+                print("Saving this model as the best.")
+                best_prec1 = acc.data[0]
+                save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
+
+            # store the grads
+            print("Storing the gradients for Tensorboard")
+            for name, param in model.named_parameters():
+                if param.requires_grad and param.grad is not None:
+                    # print("Histogram for[Name]: ",name)
+                    writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step+1)
+                    writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step+1)
+
+        else:
+            print("Exiting without saving anything")
+
+        # close the writer
+        writer.close()
+        print("Logged in: ",_LOGDIR)
+
+        sys.exit()
+
     print("Logged in: ",_LOGDIR)
 
 
