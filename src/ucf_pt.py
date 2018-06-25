@@ -13,7 +13,7 @@ from transforms import *
 parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", help="number of iterations", type=int, default=100)
 parser.add_argument("--gpus", help="Number of GPUs", type=int, default=1)
-parser.add_argument("--lr", help="starting lr", type=float, default=1e-2)
+parser.add_argument("--lr", help="starting lr", type=float, default=1e-1)
 parser.add_argument("--numw", help="number of workers on loading data", type=int, default=8)
 parser.add_argument("--batch", help="batch-size", type=int, default=6)
 parser.add_argument("--testbatch", help="test batch-size", type=int, default=6)
@@ -217,24 +217,7 @@ def main():
     except KeyboardInterrupt:
         answer = input("Do you want to save the model and the current running statistics? [y or n]\n")
         if answer == 'y':
-
-            # find the accuracy before shutting
-            acc = get_test_accuracy(model, test_loader)
-
-            # model saving 
-            if acc.data[0] > best_prec1:
-                print("Saving this model as the best.")
-                best_prec1 = acc.data[0]
-                save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
-
-            # store the grads
-            print("Storing the gradients for Tensorboard")
-            for name, param in model.named_parameters():
-                if param.requires_grad and param.grad is not None:
-                    # print("Histogram for[Name]: ",name)
-                    writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step+1)
-                    writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step+1)
-
+            interruptHandler(model, writer, test_loader, best_prec1)
         else:
             print("Exiting without saving anything")
 

@@ -76,3 +76,23 @@ def save_checkpoint(args, state, is_best, filename='checkpoint_4B.pth.tar'):
     if is_best:
         best_name = '_'.join((args.modality.lower(), 'model_best_4B.pth.tar'))
         shutil.copyfile(filename, best_name)
+
+def interruptHandler(model, writer, test_loader, best_prec1):
+
+    # find the accuracy before shutting
+    acc = get_test_accuracy(model, test_loader)
+
+    # model saving 
+    if acc.data[0] > best_prec1:
+        print("Saving this model as the best.")
+        best_prec1 = acc.data[0]
+        save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
+
+    # store the grads
+    print("Storing the gradients for Tensorboard")
+    for name, param in model.named_parameters():
+        if param.requires_grad and param.grad is not None:
+            # print("Histogram for[Name]: ",name)
+            writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step+1)
+            writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step+1)
+
