@@ -69,18 +69,11 @@ def get_set_loader():
 
     new_width = int(float(i_w) / ratio)
     new_height = int(float(i_h) / ratio)
+    print("W: %d, H: %d"%(new_width, new_height))
 
-    # if _MODALITY == 'rgb' or _MODALITY == 'flow':
-        # train_transform = transforms.Compose(
-            # [transforms.Resize([new_height, new_width]), transforms.RandomCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
-    # else:
-        # train_transform = transforms.Compose(
-            # [transforms.Resize([new_height, new_width]), transforms.CenterCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
     train_transform = transforms.Compose(
         [GroupScale(size=256),GroupRandomCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor()])
 
-    # test_transform = transforms.Compose(
-        # [transforms.Resize([new_height, new_width]), transforms.CenterCrop(size=_IMAGE_SIZE), transforms.ToTensor(), PixRescaler()])
     test_transform = transforms.Compose(
         [GroupScale(size=256), GroupCenterCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor()])
 
@@ -160,21 +153,18 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
                         train_writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step)
                         train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
 
-            if test_loader is not None and global_step % int(train_points/2) == 0:
-                acc = get_test_accuracy(model, test_loader)
-                # print("best_prec1: ",best_prec1)
-                # print("Type of acc.data: ",type(acc.data[0]))
-                if acc.data[0] > best_prec1:
-                    print("Saving this model as the best.")
-                    best_prec1 = acc.data[0]
-                    save_checkpoint(args, {'epoch': j + 1,
-                                     'state_dict': model.state_dict(),
-                                     'best_prec1': best_prec1}, True)
             
             optimizer.zero_grad()
             global_step += 1
 
         # scheduler.step(avg_loss.avg)
+        if test_loader is not None:
+            acc = get_test_accuracy(model, test_loader)
+            if acc.data[0] > best_prec1:
+                print("Saving this model as the best.")
+                best_prec1 = acc.data[0]
+                save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
+
     get_test_accuracy(model, test_loader)
     train_writer.close()
 
