@@ -53,9 +53,9 @@ eval_type = args.eval
 # dsc1 uses rgb weights with mean, while dsc2 uses flow weights with either mean or transformation
 print("Finetune: ",str(_FT))
 if _FT:
-    _LOGDIR = '../ftlogs/' + _MODALITY + '/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+    _LOGDIR = '../ftlogs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 else:
-    _LOGDIR = '../logs/' + _MODALITY + '/' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+    _LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 
 
 def get_set_loader():
@@ -103,21 +103,25 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
     avg_loss = AverageMeter()
     train_acc = AverageMeter()
 
-
-    train_points = len(train_loader)
     global j
     global global_step
     global best_prec1
+
+
+    train_points = len(train_loader)
     global_step = 1
     best_prec1 = 0.0
+
     for j in range(_EPOCHS):
 
         print("Epoch Number: %d" % (j + 1))
-        # get_test_accuracy(model, test_loader)
         if scheduler is not None:
             scheduler.step()
             for param_group in optimizer.param_groups:
                 print("Learning Rate: ",param_group['lr'])
+
+        avg_loss.reset()
+        train_acc.reset()
 
         for i, (input_3d, target) in enumerate(train_loader):
 
@@ -206,7 +210,7 @@ def main():
     sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
     if _USE_SCHED:
         # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd,'min',patience=2,verbose=True,threshold=0.0001)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,8,15])
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,8,15,25])
     else:
         scheduler = None
 
@@ -224,7 +228,6 @@ def main():
         # close the writer
         writer.close()
         print("Logged in: ",_LOGDIR)
-
         sys.exit()
 
     print("Logged in: ",_LOGDIR)
