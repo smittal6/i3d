@@ -71,13 +71,12 @@ class TSNDataSet(data.Dataset):
     def _load_image(self, directory, idx):
         if self.modality == 'rgb' or self.modality == 'RGBDiff' or self.modality == 'RGBEDR' or self.modality == 'MulEDR':
             return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('RGB')]
-        elif self.modality == 'EDR' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc':
+        elif self.modality == 'EDR' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc' or self.modality == 'flyflow':
             # Grayscale
             return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('L')]
         elif self.modality == 'flow' or self.modality == 'flowdsc':
             x_img = Image.open(os.path.join(directory, self.image_tmpl.format('x', idx))).convert('L')
             y_img = Image.open(os.path.join(directory, self.image_tmpl.format('y', idx))).convert('L')
-
             return [x_img, y_img]
 
     def _parse_list(self):
@@ -127,7 +126,12 @@ class TSNDataSet(data.Dataset):
             segment_indices = self._get_test_indices(record)
 
         # print("Getting the items finally")
-        return self.get(record, segment_indices)
+        try:
+            sample = self.get(record, segment_indices)
+        except Exception as e:
+            print(e)
+            sample = None
+        return sample
 
     def get(self, record, indices):
 
@@ -152,6 +156,13 @@ class TSNDataSet(data.Dataset):
             vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4 = Reichardt8(out.transpose(1,2,3,0))
             # print("vp1's shape : ",vp1.shape)
             out = np.concatenate((vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4), axis=-1)
+            process_data = torch.from_numpy(out).permute(3,0,1,2)
+            # print("process_data: ",process_data.size())
+
+        elif self.modality == 'flyflow':
+            out = process_data.numpy()
+            hori, verti = Reichardt_horizontal_vertical_2channel(out.transpose(1,2,3,0))
+            out = np.concatenate((hori, verti), axis=-1)
             process_data = torch.from_numpy(out).permute(3,0,1,2)
             # print("process_data: ",process_data.size())
         

@@ -1,14 +1,17 @@
-# Author: Siddharth Mittal
+# __author__ Siddharth Mittal
 
 import argparse
 import torch
 import time
 import sys
+import torchvision
 
 from tensorboardX import SummaryWriter
 from i3dmod import modI3D
 from utils import *
 from transforms import *
+from dataset import TSNDataSet
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--epochs", help="number of iterations", type=int, default=100)
@@ -19,13 +22,17 @@ parser.add_argument("--batch", help="batch-size", type=int, default=6)
 parser.add_argument("--testbatch", help="test batch-size", type=int, default=6)
 parser.add_argument("--trainlist", help="Training file list", type=str, default='../list/trainlist01.txt')
 parser.add_argument("--testlist", help="Testing file list", type=str, default='../list/protestlist01.txt')
-parser.add_argument('--modality', type=str, default='rgb', help='rgb / rgbdsc / flow / flowdsc')
+parser.add_argument('--modality', type=str, default='rgb', help='rgb / rgbdsc / flow / flowdsc / flyflow')
 parser.add_argument('--wts', type=str, default='rgb', help='rgb/flow')
+parser.add_argument('--random', type=str, default=False, help='whether the first layer should have random weights')
 parser.add_argument('--resume', type=str, default=None, help='Resume training from this file')
 parser.add_argument('--ft', type=bool, default=False, help='Finetune the model or not')
 parser.add_argument('--sched', type=str, default=False, help='Use a scheduler or not')
 parser.add_argument('--mean', type=bool, default=False, help='While transforming the weights use mean or not')
 parser.add_argument("--eval", help="Just put to keep constistency with original model (rgb)", type=str, default='rgb')
+parser.add_argument('--nstr', type=str, default=None, help='string to help in logdir')
+parser.add_argument('--lr_steps', default=[2,6,10,13], type=int, nargs="+",help='epochs to decay learning rate by 10')
+parser.add_argument('--dog', type=bool, default=False, help='string to help in logdir')
 
 # ../model/model_rgb.pth
 args = parser.parse_args()
@@ -57,6 +64,9 @@ if _FT:
 else:
     _LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 
+if args.nstr is not None:
+    _LOGDIR = _LOGDIR + "_" + args.nstr
+
 
 def get_set_loader():
 
@@ -71,23 +81,23 @@ def get_set_loader():
     new_height = int(float(i_h) / ratio)
     print("W: %d, H: %d"%(new_width, new_height))
 
-    train_transform = transforms.Compose(
+    train_transform = torchvision.transforms.Compose(
         [GroupScale(size=256),GroupRandomCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor()])
 
-    test_transform = transforms.Compose(
+    test_transform = torchvision.transforms.Compose(
         [GroupScale(size=256), GroupCenterCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor()])
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                               image_tmpl="{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc"] else "flow_"+"{}_{:05d}.jpg",
+                               image_tmpl="{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
                                transform=train_transform)
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                              image_tmpl="{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc"] else "flow_"+"{}_{:05d}.jpg",
+                              image_tmpl="{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
                               transform=test_transform)
 
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     return train_loader, test_loader
 
@@ -99,7 +109,6 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
     global j
     global global_step
     global best_prec1
-
 
     train_points = len(train_loader)
     global_step = 1
@@ -123,6 +132,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
             # Prepare data for pytorch forward pass
             start = time.time()
+
             input_3d_var = torch.autograd.Variable(input_3d.cuda())
             target = torch.autograd.Variable(target.cuda())
 
@@ -163,6 +173,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             if acc.data[0] > best_prec1:
                 print("Saving this model as the best.")
                 best_prec1 = acc.data[0]
+                print("Best Accuracy till now: %0.5f " % best_prec1)
                 save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
 
     get_test_accuracy(model, test_loader)
@@ -177,7 +188,7 @@ def main():
     train_loader, test_loader = get_set_loader()
 
     # args order: modality, num_c, finetune, dropout
-    model = modI3D(modality=_MODALITY, weights=_WTS, mean=args.mean, finetune = _FT)
+    model = modI3D(modality=_MODALITY, weights=_WTS, random=args.random, mean=args.mean, finetune = _FT, dog = args.dog)
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
 
@@ -199,8 +210,7 @@ def main():
     loss = torch.nn.CrossEntropyLoss()
     sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
     if _USE_SCHED:
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(sgd,'min',patience=2,verbose=True,threshold=0.0001)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,8,15,25])
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,6,10,13,20])
     else:
         scheduler = None
 
@@ -211,7 +221,7 @@ def main():
     except KeyboardInterrupt:
         answer = input("Do you want to save the model and the current running statistics? [y or n]\n")
         if answer == 'y':
-            interruptHandler(model, writer, test_loader, best_prec1)
+            interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j)
         else:
             print("Exiting without saving anything")
 
@@ -221,7 +231,6 @@ def main():
         sys.exit()
 
     print("Logged in: ",_LOGDIR)
-
 
 if __name__ == '__main__':
     main()

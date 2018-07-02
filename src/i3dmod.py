@@ -5,15 +5,20 @@ import numpy as np
 from i3dpt import I3D
 from i3dpt import Unit3Dpy
 
+from utils import kernels
+
 
 class modI3D(torch.nn.Module):
 
-    def __init__(self, modality='rgb', weights='rgb', mean=False, num_c=101, finetune=False, dropout_prob=0.5):
+    def __init__(self, modality='rgb', weights='rgb', random=False, mean=False, num_c=101, finetune=False, dog = False, dropout_prob=0.5):
 
         super(modI3D, self).__init__()
 
         self.num_c = num_c
         self.mean = mean
+        self.random = random
+        self.ft = finetune
+        self.dog = dog
 
         # Initialize pytorch I3D
         self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=weights)
@@ -29,10 +34,12 @@ class modI3D(torch.nn.Module):
             activation=None,
             use_bias=True,
             use_bn=False)
+
         self.softmax = torch.nn.Softmax(1)
+        self.transform = False
+        self.configure(weights, modality)
 
-        transform = False
-
+    def configure(self, weights, modality):
 
         if weights == 'rgb':
             self.path = '../model/model_rgb.pth'
@@ -43,33 +50,34 @@ class modI3D(torch.nn.Module):
         if modality == 'rgb':
             self.in_channels = 3
 
-        elif modality == 'flow':
+        elif modality == 'flow' or modality == 'flyflow':
             self.in_channels = 2
 
-        elif modality == 'rgbdsc':
+        else:
             self.in_channels = 8
-            transform = True
-
-        elif modality == 'flowdsc':
-            self.in_channels = 8
-            transform = True
+            self.transform = True
 
         self.load_weights(self.path)
 
         if weights == 'rgb':
             self.mean = True
 
-        if transform:
-            self.adapt(self.in_channels,self.mean)
+        if self.transform:
+            self.adapt()
 
-        if finetune is False:
+        if self.dog:
+            self.center_surround = torch.nn.Conv3d(self.in_channels, self.in_channels, kernel_size=(1,5,5), stride=1, padding=(0,2,2), bias=False)
+            self.center_surround.weight = torch.nn.parameter.Parameter(torch.from_numpy(kernels()).view(1,5,5).repeat(self.in_channels, self.in_channels, 1, 5, 5).float(),requires_grad=False)
+
+        if self.ft is False:
             print("Setting grads as false")
             self.set_grads_false()
 
         self.i3d.cuda()
         print("Pretrained i3D shifted to CUDA")
 
-    def adapt(self, in_channels=3, mean=False):
+
+    def adapt(self):
         '''
         Adapts the weights of the first convolutional layer in accordance with the number of channels in input
         :return:
@@ -80,11 +88,14 @@ class modI3D(torch.nn.Module):
         # bias_3d = self.i3d.conv3d_1a_7x7.conv3d.bias
 
         new_weight_3d = weight_3d.mean(1)
-        new_weight_3d = new_weight_3d.unsqueeze(1).repeat(1, in_channels, 1, 1, 1)
+        new_weight_3d = new_weight_3d.unsqueeze(1).repeat(1, self.in_channels, 1, 1, 1)
 
-        if mean:
+        if self.random:
+            new_weight_3d = torch.randn(new_weight_3d.size())
+
+        elif self.mean:
             # Modifier 1: Essentially this is the one without transform on the weights. Just the mean.
-            new_weight_3d = new_weight_3d * old_inchannels / in_channels
+            new_weight_3d = new_weight_3d * old_inchannels / self.in_channels
         else:
             trans = []
             const = 2*math.pi/8.0
@@ -92,11 +103,12 @@ class modI3D(torch.nn.Module):
                 tup = [math.cos(i * const), math.sin(i * const)]
                 trans.append(tup)
 
-            # x component is the first
+            # x component is the first, Shape of this is (8,2)
             trans = torch.from_numpy(np.asarray(trans))
-            # Shape of this is (8,2)
 
             sizes = weight_3d.size()
+
+            # TODO: make this efficient by using torch.matmul()
             for k_num in range(sizes[0]):
                 for i in range(sizes[2]):
                     for j in range(sizes[3]):
@@ -106,13 +118,14 @@ class modI3D(torch.nn.Module):
 
             print("New weight shape: ",new_weight_3d.size())
 
-        if old_inchannels != in_channels:
+        if old_inchannels != self.in_channels:
             conv3d_1a_7x7 = Unit3Dpy(
                 out_channels=64,
-                in_channels=in_channels,
+                in_channels=self.in_channels,
                 kernel_size=(7, 7, 7),
                 stride=(2, 2, 2),
-                padding='SAME')
+                padding='SAME',
+                use_bias=True)
             conv3d_1a_7x7.weight = torch.nn.parameter.Parameter(new_weight_3d)
             self.i3d.conv3d_1a_7x7 = conv3d_1a_7x7
 
@@ -134,6 +147,10 @@ class modI3D(torch.nn.Module):
 
     def forward(self, inp):
         # Loaded i3D section
+
+        if self.dog:
+            out = self.center_surround(inp)
+
         out = self.i3d.conv3d_1a_7x7(inp)
         out = self.i3d.maxPool3d_2a_3x3(out)
         out = self.i3d.conv3d_2b_1x1(out)

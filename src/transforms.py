@@ -259,6 +259,7 @@ class Stack(object):
     def __call__(self, img_group):
 
         if img_group[0].mode == 'L':
+            # print("Image mode: ",img_group[0].mode)
 
             if self.modality == 'flow' or self.modality == 'flowdsc':
 
@@ -272,7 +273,7 @@ class Stack(object):
                 res = np.stack(img_list, axis=0)
                 return res
 
-            elif self.modality == 'rgbdsc':
+            elif self.modality == 'rgbdsc' or self.modality == 'flyflow':
                 res = np.stack(img_group, axis=0)
                 res = np.expand_dims(res,3)
                 # print("rgbdsc in stack: ",res.shape)

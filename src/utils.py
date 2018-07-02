@@ -1,9 +1,10 @@
-from dataset import TSNDataSet
 from tqdm import tqdm
 import numpy as np
 import torch
+from torch._six import string_classes, int_classes
+import collections
 import shutil
-import torchvision.transforms as transforms
+import scipy.signal
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -21,18 +22,6 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
-
-class PixRescaler(object):
-
-    def __init__(self, high=1, low=-1):
-        self.high = high
-        self.low = low
-
-    def __call__(self, tensor):
-        '''
-            Currently this is very specific to DeepMind's UCF101 training case
-        '''
-        return 2*tensor-1
 
 
 def print_learnables(model):
@@ -66,7 +55,7 @@ def get_test_accuracy(model, test_loader):
         _, output = model(test)
         accs.append(accuracy(output, labels))
 
-    print("--------\t\t\t Test Accuracy: %0.5f " % np.mean(accs))
+    print("--------\t\t\tCurrent Test Accuracy: %0.5f " % np.mean(accs))
     model.train()
     return np.mean(accs)
 
@@ -77,7 +66,7 @@ def save_checkpoint(args, state, is_best, filename='checkpoint_4B.pth.tar'):
         best_name = '_'.join((args.modality.lower(), 'model_best_4B.pth.tar'))
         shutil.copyfile(filename, best_name)
 
-def interruptHandler(model, writer, test_loader, best_prec1):
+def interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j):
 
     # find the accuracy before shutting
     acc = get_test_accuracy(model, test_loader)
@@ -86,6 +75,7 @@ def interruptHandler(model, writer, test_loader, best_prec1):
     if acc.data[0] > best_prec1:
         print("Saving this model as the best.")
         best_prec1 = acc.data[0]
+        print("Best Accuracy till now: %0.5f " % best_prec1)
         save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
 
     # store the grads
@@ -96,3 +86,68 @@ def interruptHandler(model, writer, test_loader, best_prec1):
             writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step+1)
             writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step+1)
 
+def default_collate(batch):
+    r"""Puts each data field into a tensor with outer dimension batch size"""
+
+    error_msg = "batch must contain tensors, numbers, dicts or lists; found {}"
+    elem_type = type(batch[0])
+    _use_shared_memory = False
+    if isinstance(batch[0], torch.Tensor):
+        out = None
+        if _use_shared_memory:
+            # If we're in a background process, concatenate directly into a
+            # shared memory tensor to avoid an extra copy
+            numel = sum([x.numel() for x in batch])
+            storage = batch[0].storage()._new_shared(numel)
+            out = batch[0].new(storage)
+        return torch.stack(batch, 0, out=out)
+    elif elem_type.__module__ == 'numpy' and elem_type.__name__ != 'str_' \
+            and elem_type.__name__ != 'string_':
+        elem = batch[0]
+        if elem_type.__name__ == 'ndarray':
+            # array of string classes and object
+            if re.search('[SaUO]', elem.dtype.str) is not None:
+                raise TypeError(error_msg.format(elem.dtype))
+
+            return torch.stack([torch.from_numpy(b) for b in batch], 0)
+        if elem.shape == ():  # scalars
+            py_type = float if elem.dtype.name.startswith('float') else int
+            return numpy_type_map[elem.dtype.name](list(map(py_type, batch)))
+    elif isinstance(batch[0], int_classes):
+        return torch.LongTensor(batch)
+    elif isinstance(batch[0], float):
+        return torch.DoubleTensor(batch)
+    elif isinstance(batch[0], string_classes):
+        return batch
+    elif isinstance(batch[0], collections.Mapping):
+        return {key: default_collate([d[key] for d in batch]) for key in batch[0]}
+    elif isinstance(batch[0], collections.Sequence):
+        transposed = zip(*batch)
+        return [default_collate(samples) for samples in transposed]
+
+    raise TypeError((error_msg.format(type(batch[0]))))
+
+def my_collate(batch):
+    '''
+    Filter out the None elements [introduced as a part to ignore the missing flow files]
+    '''
+    batch = list(filter(lambda x: x is not None, batch))
+    return default_collate(batch)
+
+
+def gkern(kernlen=7, std=3, max =1):
+    """Returns a 2D Gaussian kernel array."""
+    gkern1d = scipy.signal.gaussian(kernlen, std=std).reshape(kernlen, 1)
+    gkern2d = np.outer(gkern1d, gkern1d)
+    return gkern2d * max
+    
+    
+def kernels(size=5):
+    m = gkern(kernlen=size, std = 5, max=0.5)
+    m1 = gkern(kernlen=size, std = 1, max=2)
+    x = (m1 - m)
+    x = x.reshape(1,5,5)
+    print("The filter: ")
+    print(x)
+    # print("The sum of the kernel: ",np.sum(x))
+    return x
