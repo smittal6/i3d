@@ -1,65 +1,60 @@
 import torch
 import math
 import numpy as np
-
 from i3dpt import I3D
 from i3dpt import Unit3Dpy
-
 from utils import kernels
+from opts import parser
+
+args = parser.parse_args()
 
 
 class modI3D(torch.nn.Module):
 
-    def __init__(self, modality='rgb', weights='rgb', random=False, mean=False, num_c=101, finetune=False, dog = False, dropout_prob=0.5):
+    def __init__(self, num_c=101, dropout_prob=0.5):
 
         super(modI3D, self).__init__()
 
         self.num_c = num_c
-        self.mean = mean
-        self.random = random
-        self.ft = finetune
-        self.dog = dog
+        self.mean = args.mean
+        self.random = args.random
+        self.ft = args.ft
+        self.dog = args.dog
+        self.modality = args.modality
+        self.weights = args.wts
+        self.transform = False
+        self.path = ''
+        self.center_surround = None
 
         # Initialize pytorch I3D
-        self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=weights)
+        self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=self.weights)
         # Can't change the classes because weight loading will cause issues.
 
         # Define the final layers
         self.avg_pool = torch.nn.AvgPool3d((2, 7, 7), (1, 1, 1))
         self.dropout = torch.nn.Dropout(dropout_prob)
-        self.conv3d_0c_1x1 = Unit3Dpy(
-            in_channels=1024,
-            out_channels=self.num_c,
-            kernel_size=(1, 1, 1),
-            activation=None,
-            use_bias=True,
-            use_bn=False)
-
+        self.conv3d_0c_1x1 = Unit3Dpy(in_channels=1024, out_channels=self.num_c, kernel_size=(1, 1, 1), activation=None, use_bias=True, use_bn=False)
         self.softmax = torch.nn.Softmax(1)
-        self.transform = False
-        self.configure(weights, modality)
+        self.configure()
 
-    def configure(self, weights, modality):
+    def configure(self):
 
-        if weights == 'rgb':
+        if self.weights == 'rgb':
             self.path = '../model/model_rgb.pth'
         else:
             self.path = '../model/model_flow.pth'
 
-
-        if modality == 'rgb':
+        if self.modality == 'rgb':
             self.in_channels = 3
-
-        elif modality == 'flow' or modality == 'flyflow':
+        elif self.modality == 'flow' or self.modality == 'flyflow':
             self.in_channels = 2
-
         else:
             self.in_channels = 8
             self.transform = True
 
-        self.load_weights(self.path)
+        self.load_weights()
 
-        if weights == 'rgb':
+        if self.weights == 'rgb':
             self.mean = True
 
         if self.transform:
@@ -75,7 +70,6 @@ class modI3D(torch.nn.Module):
 
         self.i3d.cuda()
         print("Pretrained i3D shifted to CUDA")
-
 
     def adapt(self):
         '''
@@ -128,13 +122,12 @@ class modI3D(torch.nn.Module):
                 use_bias=True)
             conv3d_1a_7x7.weight = torch.nn.parameter.Parameter(new_weight_3d)
             self.i3d.conv3d_1a_7x7 = conv3d_1a_7x7
-
         print("Weights Transformed")
 
-    def load_weights(self, weight_path):
+    def load_weights(self):
 
         self.i3d.eval()
-        self.i3d.load_state_dict(torch.load(weight_path))
+        self.i3d.load_state_dict(torch.load(self.path))
         print("Pretrained i3D weights restored")
 
         # print("Shape of weights: ",self.i3d.conv3d_1a_7x7.conv3d.weight.data.size())
@@ -149,7 +142,7 @@ class modI3D(torch.nn.Module):
         # Loaded i3D section
 
         if self.dog:
-            out = self.center_surround(inp)
+            inp = self.center_surround(inp)
 
         out = self.i3d.conv3d_1a_7x7(inp)
         out = self.i3d.maxPool3d_2a_3x3(out)

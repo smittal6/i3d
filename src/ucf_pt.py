@@ -1,46 +1,22 @@
 # __author__ Siddharth Mittal
-
-import argparse
 import torch
 import time
 import sys
 import torchvision
 
 from tensorboardX import SummaryWriter
-from i3dmod import modI3D
+from i3dmod import modI3D   # i3d model
 from utils import *
-from transforms import *
+from transforms import *    # dataset transforms
 from dataset import TSNDataSet
+from opts import parser     # options(args)
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--epochs", help="number of iterations", type=int, default=100)
-parser.add_argument("--gpus", help="Number of GPUs", type=int, default=1)
-parser.add_argument("--lr", help="starting lr", type=float, default=1e-1)
-parser.add_argument("--numw", help="number of workers on loading data", type=int, default=8)
-parser.add_argument("--batch", help="batch-size", type=int, default=6)
-parser.add_argument("--testbatch", help="test batch-size", type=int, default=6)
-parser.add_argument("--trainlist", help="Training file list", type=str, default='../list/trainlist01.txt')
-parser.add_argument("--testlist", help="Testing file list", type=str, default='../list/protestlist01.txt')
-parser.add_argument('--modality', type=str, default='rgb', help='rgb / rgbdsc / flow / flowdsc / flyflow')
-parser.add_argument('--wts', type=str, default='rgb', help='rgb/flow')
-parser.add_argument('--random', type=str, default=False, help='whether the first layer should have random weights')
-parser.add_argument('--resume', type=str, default=None, help='Resume training from this file')
-parser.add_argument('--ft', type=bool, default=False, help='Finetune the model or not')
-parser.add_argument('--sched', type=str, default=False, help='Use a scheduler or not')
-parser.add_argument('--mean', type=bool, default=False, help='While transforming the weights use mean or not')
-parser.add_argument("--eval", help="Just put to keep constistency with original model (rgb)", type=str, default='rgb')
-parser.add_argument('--nstr', type=str, default=None, help='string to help in logdir')
-parser.add_argument('--lr_steps', default=[2,6,10,13], type=int, nargs="+",help='epochs to decay learning rate by 10')
-parser.add_argument('--dog', type=bool, default=False, help='string to help in logdir')
 
 # ../model/model_rgb.pth
 args = parser.parse_args()
-
 _SAMPLE_VIDEO_FRAMES = 64
 _IMAGE_SIZE = 224
 _NUM_CLASSES = 101
-
 _BATCH_SIZE = args.batch
 _TEST_BATCH_SIZE = args.testbatch
 _NUM_GPUS = args.gpus
@@ -57,7 +33,6 @@ _FT = args.ft
 eval_type = args.eval
 
 
-# dsc1 uses rgb weights with mean, while dsc2 uses flow weights with either mean or transformation
 print("Finetune: ",str(_FT))
 if _FT:
     _LOGDIR = '../ftlogs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
@@ -188,7 +163,7 @@ def main():
     train_loader, test_loader = get_set_loader()
 
     # args order: modality, num_c, finetune, dropout
-    model = modI3D(modality=_MODALITY, weights=_WTS, random=args.random, mean=args.mean, finetune = _FT, dog = args.dog)
+    model = modI3D()
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
 
