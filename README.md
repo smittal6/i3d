@@ -40,7 +40,14 @@ Use the flow data in /mnt/data1/UCF-101_old, but transform the data from 2 chann
 [Not thresholding the output currently]
 
 - flyflow:
-Use only 2 channel Reichardt output for rgb data in /mnt/data1/UCF-101
+    - Use only 2 channel Reichardt output for rgb data in /mnt/data1/UCF-101
+    - With flyflow and specifying more than 2 rdirs, by default mean will become active to ensure model integrity. That is for the first layer of convolutions, weights will be averaged, and then finetuned.
+    - rdirs convention: 
+        * 0,1: vertical(1), vertical(-1)
+        * 2,3: diagnol1(2), diagnol1(-2)
+        * 4,5: horizontal(3), horizontal(-3)
+        * 6,7: diagnol2(4), diagnol2(-4)
+
 
 ## List details
 
