@@ -18,9 +18,8 @@ class VideoRecord(object):
         for parent, dirnames, filenames in os.walk(self._data[0]):
             filenames = [f for f in filenames if '.avi' not in f]
 
-        self.len = len(filenames)
-        if modality == 'flowdsc' or modality == 'flow':
-            self.len = int(self.len/3) # 3 to account for img_, and 2 X flow_
+        self.len = int(len(filenames)/3)
+        # self.len = int(self.len/3) # 3 to account for img_, and 2 X flow_
 
     @property
     def path(self):
@@ -54,7 +53,7 @@ class TSNDataSet(data.Dataset):
         if self.modality in ['RGBDiff', 'EDR', 'GrayDiff', 'RGBEDR', 'MulEDR']:
             self.new_length += 1# Diff needs one more image to calculate diff
 
-        print("Called TSN Init")
+        print("Called TSNDataset Init")
 
         self._parse_list()
 

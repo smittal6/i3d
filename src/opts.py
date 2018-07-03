@@ -2,8 +2,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Script for training i3d on UCF-101 with different options")
 
-parser.add_argument("--trainlist", help="Training file list", type=str, default='../list/trainlist01.txt')
-parser.add_argument("--testlist", help="Testing file list", type=str, default='../list/protestlist01.txt')
+parser.add_argument("--trainlist", help="Training file list", type=str, default='../list/flowtrainlist01.txt')
+parser.add_argument("--testlist", help="Testing file list", type=str, default='../list/flowtestlist01.txt')
 parser.add_argument('--nstr', type=str, default=None, help='string to help in logdir')
 
 # ====================================== Model Configs =====================================

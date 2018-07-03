@@ -35,17 +35,34 @@ Use the rgb data in /mnt/data1/UCF-101, convert to grayscale, and then send to R
 - flow:
 Simply use the flow data in /mnt/data1/UCF-101_old
 
-- flowdsc
+- flowdsc:
 Use the flow data in /mnt/data1/UCF-101_old, but transform the data from 2 channels to 8 using the transformation matrix.
 [Not thresholding the output currently]
 
-- flyflow
+- flyflow:
 Use only 2 channel Reichardt output for rgb data in /mnt/data1/UCF-101
+
+## List details
+
+- Training list: flowtrainlist01.txt
+- Testing list: flowtestlist01.txt
+- The data folder for each video has flow_x and flow_y along with img for all the timesteps in the video.
 
 ## Example
 
+- Running flyflow modality, with flow weights and 2 GPUs and no scheduler
 ```
-CUDA_VISIBLE_DEVICES='4,5' python ucf_pt.py --lr 0.01 --epochs 6 --trainlist ../list/trainlist01.txt --testlist ../list/protestlist01.txt
+CUDA_VISIBLE_DEVICES="4,5" python ucf_pt.py --modality flyflow --wts flow --epochs 40 --ft True --lr 0.001 --gpus 2 --trainlist ../list/flowtrainlist01.txt --testlist ../list/flowtestlist01.txt
+```
+
+- Running flowdsc modality, with flow weights and 2 GPUs and no scheduler
+```
+CUDA_VISIBLE_DEVICES="4,5" python ucf_pt.py --modality flyflow --wts flow --epochs 40 --ft True --lr 0.001 --gpus 2 --trainlist ../list/flowtrainlist01.txt --testlist ../list/flowtestlist01.txt
+```
+
+- Running rgb modality with difference of gaussian, with flow weights and 2 GPUs and no scheduler
+```
+CUDA_VISIBLE_DEVICES="2,7" python ucf_pt.py --ft True --gpus 2 --modality rgb --wts rgb --lr 0.001 --epochs 40 --random True --dog True --nstr frand_nsched_dog
 ```
 
 ## [Results](https://docs.google.com/spreadsheets/d/1S2Qb1E3a6jRwpmNY7_TuHdeCRzgPuqV4pldVhNZSK6k/edit?usp=sharing)

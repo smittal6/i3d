@@ -8,7 +8,6 @@ from opts import parser
 
 args = parser.parse_args()
 
-
 class modI3D(torch.nn.Module):
 
     def __init__(self, num_c=101, dropout_prob=0.5):
