@@ -9,6 +9,7 @@ import numpy as np
 from numpy.random import randint
 
 from ReichardtDS8 import *
+from opts import args
 
 
 class VideoRecord(object):
@@ -160,15 +161,16 @@ class TSNDataSet(data.Dataset):
 
         elif self.modality == 'flyflow':
             out = process_data.numpy()
-            hori, verti = Reichardt_horizontal_vertical_2channel(out.transpose(1,2,3,0))
-            out = np.concatenate((hori, verti), axis=-1)
+            out_list = Reichardt8(out.transpose(1,2,3,0),args.rdirs)
+            out = np.concatenate(out_list, axis=-1)
             process_data = torch.from_numpy(out).permute(3,0,1,2)
             # print("process_data: ",process_data.size())
         
         elif self.modality == 'flowdsc':
             process_data = torch.matmul(self.basis, process_data.double().permute(1,2,0,3))
             process_data = process_data.permute(2,0,1,3).float()
-        
+            # print("Mean: %0.3f, Deviation: %0.3f"%(process_data.mean(),process_data.std()))
+
         # print("processed data size: ",process_data.size())
         return process_data, record.label
 

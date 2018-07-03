@@ -147,6 +147,7 @@ def kernels(size=5):
     m1 = gkern(kernlen=size, std = 1, max=2)
     x = (m1 - m)
     x = x.reshape(1,5,5)
+    x = x/np.max(x)
     print("The filter: ")
     print(x)
     # print("The sum of the kernel: ",np.sum(x))

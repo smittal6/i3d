@@ -9,11 +9,10 @@ from i3dmod import modI3D   # i3d model
 from utils import *
 from transforms import *    # dataset transforms
 from dataset import TSNDataSet
-from opts import parser     # options(args)
-
+from opts import args    # options(args)
 
 # ../model/model_rgb.pth
-args = parser.parse_args()
+# args = parser.parse_args()
 _SAMPLE_VIDEO_FRAMES = 64
 _IMAGE_SIZE = 224
 _NUM_CLASSES = 101
@@ -102,17 +101,22 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
         for i, (input_3d, target) in enumerate(train_loader):
 
-            # print("Input shape: ",input_3d.size())
             # print("Target shape: ",target.size())
 
             # Prepare data for pytorch forward pass
             start = time.time()
 
             input_3d_var = torch.autograd.Variable(input_3d.cuda())
+            if args.thres is not None:
+                input_3d_var = torch.nn.functional.threshold(input_3d_var,threshold=args.thres,value=0.0)
             target = torch.autograd.Variable(target.cuda())
 
             # Pytorch forward pass
+            # print("Input shape: ",input_3d_var.size())
             out_pt, logits = model(input_3d_var)
+
+            if args.modality2 is not None:
+                out_pt2, logits2 = model(input_3d_var)
 
             # compute the loss and update the meter
             loss = criterion(logits, target)
@@ -121,7 +125,6 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             # compute the training accuracy
             prec1 = accuracy(logits, target)
             train_acc.update(prec1[0],input_3d.size(0))
-
 
             print("Ep: %d, Step: [%d / %d], Loss: %0.5f, Avg: %0.4f, Acc: %0.4f, Time: %0.3f" % (j+1, i+1, train_points, loss.data[0], avg_loss.avg, train_acc.avg, time.time()-start))
 
@@ -145,6 +148,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
         # scheduler.step(avg_loss.avg)
         if test_loader is not None:
             acc = get_test_accuracy(model, test_loader)
+            print("Best Accuracy till now: %0.5f " % best_prec1)
             if acc.data[0] > best_prec1:
                 print("Saving this model as the best.")
                 best_prec1 = acc.data[0]
@@ -164,6 +168,10 @@ def main():
 
     # args order: modality, num_c, finetune, dropout
     model = modI3D()
+
+    if args.modality2 is not None:
+        model_stream2 = modI3D()
+    
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
 
@@ -185,7 +193,7 @@ def main():
     loss = torch.nn.CrossEntropyLoss()
     sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
     if _USE_SCHED:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=[2,6,10,13,20])
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=args.lr_steps)
     else:
         scheduler = None
 

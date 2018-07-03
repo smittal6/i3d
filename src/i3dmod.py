@@ -4,9 +4,8 @@ import numpy as np
 from i3dpt import I3D
 from i3dpt import Unit3Dpy
 from utils import kernels
-from opts import parser
+from opts import args
 
-args = parser.parse_args()
 
 class modI3D(torch.nn.Module):
 
@@ -27,7 +26,6 @@ class modI3D(torch.nn.Module):
 
         # Initialize pytorch I3D
         self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=self.weights)
-        # Can't change the classes because weight loading will cause issues.
 
         # Define the final layers
         self.avg_pool = torch.nn.AvgPool3d((2, 7, 7), (1, 1, 1))
@@ -45,8 +43,20 @@ class modI3D(torch.nn.Module):
 
         if self.modality == 'rgb':
             self.in_channels = 3
-        elif self.modality == 'flow' or self.modality == 'flyflow':
+
+        elif self.modality == 'flow':
             self.in_channels = 2
+
+        elif self.modality == 'flyflow':
+            # pick only these directions [Note for all 8 directions currently use flowdsc or rgbdsc]
+            self.in_channels = len(args.rdirs)
+
+            # We have to do this because we cannot transform the weight directly using the matrix
+            # Also, currently no plan to use rgb weights with this, else we can do without transforming with 3 channels
+            if len(args.rdirs) > 2:
+                self.transform = True
+                self.mean = True
+
         else:
             self.in_channels = 8
             self.transform = True
@@ -54,21 +64,26 @@ class modI3D(torch.nn.Module):
         self.load_weights()
 
         if self.weights == 'rgb':
+            print("Overriding the provided option for mean as using rgb weights [Can't transform these from 3 dim space]")
             self.mean = True
 
         if self.transform:
+            # without calling this the weights won't adapt
             self.adapt()
 
         if self.dog:
+            # Kernel size: 1,5,5 ### 1 along time dimension to ensure this acts like a Conv2d
             self.center_surround = torch.nn.Conv3d(self.in_channels, self.in_channels, kernel_size=(1,5,5), stride=1, padding=(0,2,2), bias=False)
-            self.center_surround.weight = torch.nn.parameter.Parameter(torch.from_numpy(kernels()).view(1,5,5).repeat(self.in_channels, self.in_channels, 1, 5, 5).float(),requires_grad=False)
+            self.center_surround.weight = torch.nn.parameter.Parameter(torch.from_numpy(kernels()).view(1,5,5).repeat(self.in_channels, self.in_channels, 1, 1, 1).float(),requires_grad=False)
 
         if self.ft is False:
             print("Setting grads as false")
             self.set_grads_false()
 
+        # move the i3d model to cuda
         self.i3d.cuda()
         print("Pretrained i3D shifted to CUDA")
+
 
     def adapt(self):
         '''
@@ -142,6 +157,7 @@ class modI3D(torch.nn.Module):
 
         if self.dog:
             inp = self.center_surround(inp)
+            # print("Post DoG shape: ",inp.size())
 
         out = self.i3d.conv3d_1a_7x7(inp)
         out = self.i3d.maxPool3d_2a_3x3(out)
