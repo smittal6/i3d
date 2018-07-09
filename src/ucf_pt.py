@@ -77,7 +77,7 @@ def get_set_loader():
 
     return train_loader, test_loader
 
-def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None, test_writer=None):
+def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None):
 
     avg_loss = AverageMeter()
     train_acc = AverageMeter()
@@ -147,6 +147,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
         # scheduler.step(avg_loss.avg)
         if test_loader is not None:
             acc = get_test_accuracy(model, test_loader)
+            train_writer.add_scalar('Test Acc', acc.data[0], global_step)
             print("Best Accuracy till now: %0.5f " % best_prec1)
             if acc.data[0] > best_prec1:
                 print("Saving this model as the best.")

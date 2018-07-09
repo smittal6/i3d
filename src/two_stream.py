@@ -55,20 +55,20 @@ def get_set_loader():
         [GroupScale(size=256), GroupCenterCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor(pure=pure)])
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                               image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
+                               image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow","edr1"] else "flow_"+"{}_{:05d}.jpg",
                                transform=train_transform, two_stream=True)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                              image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
+                              image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow","edr1"] else "flow_"+"{}_{:05d}.jpg",
                               transform=test_transform, two_stream=True)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     return train_loader, test_loader
 
-def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None, test_writer=None):
+def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None):
 
     avg_loss = AverageMeter()
     train_acc = AverageMeter()
@@ -144,6 +144,7 @@ def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, 
         # scheduler.step(avg_loss.avg)
         if test_loader is not None:
             acc = get_test_accuracy(model, test_loader, model_stream2)
+            train_writer.add_scalar('Test Acc', acc.data[0], global_step)
             print("Best Accuracy till now: %0.5f " % best_prec1)
             if acc.data[0] > best_prec1:
                 print("Saving this model as the best.")
