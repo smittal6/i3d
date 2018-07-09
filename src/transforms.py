@@ -259,13 +259,13 @@ class Stack(object):
     def __call__(self, img_group):
 
         if img_group[0].mode == 'L':
-            # print("Image mode: ",img_group[0].mode)
 
             if self.modality == 'flow' or self.modality == 'flowdsc':
+                # Two consecutive images are the flow components of a single image
 
                 img_list = []
-
                 for i in range(int(len(img_group)/2)):
+
                     t1 = np.expand_dims(np.stack((img_group[2*i],img_group[2*i + 1]),axis=2),0)
                     # Stack the two dx and dy channels at the end
                     img_list.extend(t1)
@@ -273,7 +273,8 @@ class Stack(object):
                 res = np.stack(img_list, axis=0)
                 return res
 
-            elif self.modality == 'rgbdsc' or self.modality == 'flyflow':
+            elif self.modality == 'rgbdsc' or self.modality == 'flyflow' or self.modality == 'edr1':
+                # Stack all greyscale images together
                 res = np.stack(img_group, axis=0)
                 res = np.expand_dims(res,3)
                 # print("rgbdsc in stack: ",res.shape)

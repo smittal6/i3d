@@ -51,6 +51,10 @@ class modI3D(torch.nn.Module):
         elif self.modality == 'flow':
             self.in_channels = 2
 
+        elif self.modality == 'edr1':
+            self.in_channels = 2
+            self.transform = True
+
         elif self.modality == 'flyflow':
             # pick only these directions [Note for all 8 directions currently use flowdsc or rgbdsc]
             self.in_channels = len(args.rdirs)
@@ -68,7 +72,7 @@ class modI3D(torch.nn.Module):
         self.load_weights()
 
         if self.weights == 'rgb':
-            print("Overriding the provided option for mean as using rgb weights [Can't transform these from 3 dim space]")
+            print("Overriding the provided option for mean as using rgb weights [Can't transform weights from 3 dim space]")
             self.mean = True
 
         if self.transform:

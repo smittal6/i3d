@@ -9,6 +9,7 @@ import numpy as np
 from numpy.random import randint
 
 from ReichardtDS8 import *
+from retina_convert import retina
 from opts import args
 from utils import rescale
 
@@ -54,8 +55,8 @@ class TSNDataSet(data.Dataset):
         self.two_stream = two_stream
         self.rgb_format = 'img_{:05d}.jpg'
 
-        if self.modality in ['RGBDiff', 'EDR', 'GrayDiff', 'RGBEDR', 'MulEDR']:
-            self.new_length += 1# Diff needs one more image to calculate diff
+        # if self.modality in ['RGBDiff', 'EDR', 'GrayDiff', 'RGBEDR', 'MulEDR']:
+            # self.new_length += 1# Diff needs one more image to calculate diff
 
         print("Called TSNDataset Init")
 
@@ -80,7 +81,7 @@ class TSNDataSet(data.Dataset):
             # print("Entering override")
             # print(str(os.path.join(directory, self.rgb_format.format(idx))))
             ret = [Image.open(os.path.join(directory, self.rgb_format.format(idx))).convert('RGB')]
-        elif self.modality == 'EDR' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc' or self.modality == 'flyflow':
+        elif self.modality == 'edr1' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc' or self.modality == 'flyflow':
             # Grayscale
             ret = [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('L')]
         elif self.modality == 'flow' or self.modality == 'flowdsc':
@@ -189,6 +190,13 @@ class TSNDataSet(data.Dataset):
             process_data = torch.matmul(self.basis, process_data.double().permute(1,2,0,3))
             process_data = process_data.permute(2,0,1,3).float()
             # print("Mean: %0.3f, Deviation: %0.3f"%(process_data.mean(),process_data.std()))
+
+        elif self.modality == 'edr1':
+            out = process_data.numpy()
+            out = retina(out.transpose(1,2,3,0), alpha=0.5, mu_on=0.05,mu_off=-0.10)
+            out = rescale(out, scale_min=-1,scale_max=1)
+            process_data = torch.from_numpy(out).permute(3,0,1,2)
+            # print("process_data: ",process_data.size()) # Shape ~ [2,Timesteps,H,W]
 
         # print("processed data size: ",process_data.size())
 

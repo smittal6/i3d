@@ -64,13 +64,13 @@ def get_set_loader():
         [GroupScale(size=256), GroupCenterCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor(pure=pure)])
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                               image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
+                               image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow", "edr1"] else "flow_"+"{}_{:05d}.jpg",
                                transform=train_transform)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                              image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
+                              image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow", "edr1"] else "flow_"+"{}_{:05d}.jpg",
                               transform=test_transform)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
@@ -187,7 +187,6 @@ def main():
     print_learnables(model)
     model.train()
     model.cuda()
-
 
     # with cross entropy loss we don't require to compute softmax, nor do we need one-hot encodings
     loss = torch.nn.CrossEntropyLoss()
