@@ -1,4 +1,7 @@
 # __author__ Siddharth Mittal
+
+# This file is for two stream network only
+
 import torch
 import time
 import sys
@@ -10,6 +13,7 @@ from utils import *
 from transforms import *    # dataset transforms
 from dataset import TSNDataSet
 from opts import args    # options(args)
+from itertools import chain
 
 # ../model/model_rgb.pth
 # args = parser.parse_args()
@@ -33,10 +37,7 @@ eval_type = args.eval
 
 
 print("Finetune: ",str(_FT))
-if _FT:
-    _LOGDIR = '../ftlogs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
-else:
-    _LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+_LOGDIR = '../twos_logs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
 
 if args.nstr is not None:
     _LOGDIR = _LOGDIR + "_" + args.nstr
@@ -44,16 +45,6 @@ if args.nstr is not None:
 
 def get_set_loader():
 
-    # i_h = 240
-    # i_w = 320
-
-    # Take the min value, and use it for the ratio
-    # min_ = min(i_w, i_h)
-    # ratio = float(min_) / 256
-
-    # new_width = int(float(i_w) / ratio)
-    # new_height = int(float(i_h) / ratio)
-    # print("W: %d, H: %d"%(new_width, new_height))
 
     pure = True if _MODALITY == 'rgb' or _MODALITY == 'flow' else False
 
@@ -65,19 +56,19 @@ def get_set_loader():
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
                                image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
-                               transform=train_transform)
+                               transform=train_transform, two_stream=True)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
                               image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow"] else "flow_"+"{}_{:05d}.jpg",
-                              transform=test_transform)
+                              transform=test_transform, two_stream=True)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     return train_loader, test_loader
 
-def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None, test_writer=None):
+def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None, test_writer=None):
 
     avg_loss = AverageMeter()
     train_acc = AverageMeter()
@@ -101,7 +92,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
         avg_loss.reset()
         train_acc.reset()
 
-        for i, (input_3d, target) in enumerate(train_loader):
+        for i, (input_3d, input_stream2, target) in enumerate(train_loader):
 
             # print("Target shape: ",target.size())
 
@@ -109,20 +100,27 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             start = time.time()
 
             input_3d_var = torch.autograd.Variable(input_3d.cuda())
+            input_stream2_var = torch.autograd.Variable(input_stream2.cuda())
             if args.thres is not None:
                 input_3d_var = torch.nn.functional.threshold(input_3d_var,threshold=args.thres,value=0.0)
+                input_stream2_var = torch.nn.functional.threshold(input_stream2_var,threshold=args.thres,value=0.0)
+
             target = torch.autograd.Variable(target.cuda())
 
-            # Pytorch forward pass
             # print("Input shape: ",input_3d_var.size())
+
+            # Stream1
             out_pt, logits = model(input_3d_var)
 
+            # Stream2
+            out_pt2, logits2 = model_stream2(input_stream2_var)
+
             # compute the loss and update the meter
-            loss = criterion(logits, target)
+            loss = criterion(logits+logits2, target)
             avg_loss.update(loss.data[0])
 
             # compute the training accuracy
-            prec1 = accuracy(logits, target)
+            prec1 = accuracy(logits+logits2, target)
             train_acc.update(prec1[0],input_3d.size(0))
 
             print("Ep: %d, Step: [%d / %d], Loss: %0.5f, Avg: %0.4f, Acc: %0.4f, Time: %0.3f" % (j+1, i+1, train_points, loss.data[0], avg_loss.avg, train_acc.avg, time.time()-start))
@@ -134,19 +132,18 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
             if global_step % int(train_points/4) == 0:
                 print("Storing the gradients for Tensorboard")
-                for name, param in model.named_parameters():
+                for name, param in chain(model.named_parameters(),model_stream2.named_parameters()):
                     if param.requires_grad and param.grad is not None:
                         # print("Histogram for[Name]: ",name)
                         train_writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step)
                         train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
-
             
             optimizer.zero_grad()
             global_step += 1
 
         # scheduler.step(avg_loss.avg)
         if test_loader is not None:
-            acc = get_test_accuracy(model, test_loader)
+            acc = get_test_accuracy(model, test_loader, model_stream2)
             print("Best Accuracy till now: %0.5f " % best_prec1)
             if acc.data[0] > best_prec1:
                 print("Saving this model as the best.")
@@ -154,7 +151,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
                 print("Best Accuracy till now: %0.5f " % best_prec1)
                 save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
 
-    get_test_accuracy(model, test_loader)
+    get_test_accuracy(model, test_loader, model_stream2)
     train_writer.close()
 
 
@@ -165,14 +162,12 @@ def main():
 
     train_loader, test_loader = get_set_loader()
 
-    # args order: modality, num_c, finetune, dropout
     model = modI3D(modality=_MODALITY, wts=_WTS, dog=args.dog, mean=args.mean, random=args.random)
-
-    # if args.two_stream is not False:
-        # model_stream2 = modI3D(modality='rgb', wts='rgb', dog=args.dog2)
+    model_stream2 = modI3D(modality='rgb', wts='rgb', dog=args.dog2)
     
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
+        model_stream2 = torch.nn.DataParallel(model_stream2)
 
     if args.resume:
         if os.path.isfile(args.resume):
@@ -185,26 +180,36 @@ def main():
             print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
 
     print_learnables(model)
+    print_learnables(model_stream2)
+
     model.train()
     model.cuda()
 
+    model_stream2.train()
+    model_stream2.cuda()
 
     # with cross entropy loss we don't require to compute softmax, nor do we need one-hot encodings
     loss = torch.nn.CrossEntropyLoss()
-    sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
+    stream1_learn = list(filter(lambda p: p.requires_grad, model.parameters()))
+    stream2_learn = list(filter(lambda p: p.requires_grad, model_stream2.parameters()))
+    control_params = stream1_learn + stream2_learn
+    sgd = torch.optim.SGD(control_params, lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
+
+    # Scheduler
     if _USE_SCHED:
         scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=args.lr_steps)
     else:
         scheduler = None
 
+    # Summary Writer
     writer = SummaryWriter(_LOGDIR)
 
     try:
-        run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
+        run(model, model_stream2, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
     except KeyboardInterrupt:
         answer = input("Do you want to save the model and the current running statistics? [y or n]\n")
         if answer == 'y':
-            interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j)
+            interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j, model_stream2)
         else:
             print("Exiting without saving anything")
 

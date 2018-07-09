@@ -292,9 +292,11 @@ class Stack(object):
 
 class ToTorchFormatTensor(object):
     """ Converts a PIL.Image (RGB) or numpy.ndarray (H x W x C) in the range [0, 255]
-    to a torch.FloatTensor of shape (C x H x W) in the range [-1.0, 1.0] """
-    def __init__(self, div=True):
+    to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0] """
+
+    def __init__(self, div=True, pure=False):
         self.div = div
+        self.pure = pure
 
     def __call__(self, pic):
         if isinstance(pic, np.ndarray):
@@ -311,7 +313,9 @@ class ToTorchFormatTensor(object):
             # yikes, this transpose takes 80% of the loading time/CPU
             img = img.transpose(0, 1).transpose(0, 2).contiguous()
             img = img.float().div(255) if self.div else img.float()
-        img = 2*img - 1 # to bring values between -1 and 1
+
+        if self.pure:
+            img = 2*img - 1
         return img
 
 

@@ -10,6 +10,7 @@ from numpy.random import randint
 
 from ReichardtDS8 import *
 from opts import args
+from utils import rescale
 
 
 class VideoRecord(object):
@@ -38,8 +39,8 @@ class VideoRecord(object):
 class TSNDataSet(data.Dataset):
     def __init__(self, root_path, list_file,
                  num_segments=3, new_length=1, modality='rgb',
-                 image_tmpl='{:05d}.jpg', transform=None,
-                 force_grayscale=False, random_shift=True, test_mode=False):
+                 image_tmpl='img_{:05d}.jpg', transform=None,
+                 force_grayscale=False, random_shift=True, test_mode=False, two_stream = False):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -50,6 +51,8 @@ class TSNDataSet(data.Dataset):
         self.transform = transform
         self.random_shift = random_shift
         self.test_mode = test_mode
+        self.two_stream = two_stream
+        self.rgb_format = 'img_{:05d}.jpg'
 
         if self.modality in ['RGBDiff', 'EDR', 'GrayDiff', 'RGBEDR', 'MulEDR']:
             self.new_length += 1# Diff needs one more image to calculate diff
@@ -68,24 +71,32 @@ class TSNDataSet(data.Dataset):
             # x component is the first
             self.basis = torch.from_numpy(np.asarray(trans)) # 8 rows and 2 columns
 
-    def _load_image(self, directory, idx):
-        if self.modality == 'rgb' or self.modality == 'RGBDiff' or self.modality == 'RGBEDR' or self.modality == 'MulEDR':
-            return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('RGB')]
+    def _load_image(self, directory, idx, override = False):
+        '''
+        Override represents the case when we have to load data for stream two, which will be rgb
+        '''
+        # print("Index: ",idx)
+        if override or self.modality == 'rgb' or self.modality == 'RGBDiff' or self.modality == 'RGBEDR' or self.modality == 'MulEDR':
+            # print("Entering override")
+            # print(str(os.path.join(directory, self.rgb_format.format(idx))))
+            ret = [Image.open(os.path.join(directory, self.rgb_format.format(idx))).convert('RGB')]
         elif self.modality == 'EDR' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc' or self.modality == 'flyflow':
             # Grayscale
-            return [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('L')]
+            ret = [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('L')]
         elif self.modality == 'flow' or self.modality == 'flowdsc':
             x_img = Image.open(os.path.join(directory, self.image_tmpl.format('x', idx))).convert('L')
             y_img = Image.open(os.path.join(directory, self.image_tmpl.format('y', idx))).convert('L')
-            return [x_img, y_img]
+            ret = [x_img, y_img]
+        
+        return ret
 
     def _parse_list(self):
         print("Parsing list now")
         self.video_list = [VideoRecord(x.strip().split(' '), self.modality) for x in open(self.list_file)]
+        print("Found %d videos "%(len(self.video_list)))
 
     def _sample_indices(self, record):
         """
-
         :param record: VideoRecord
         :return: list
         """
@@ -126,15 +137,19 @@ class TSNDataSet(data.Dataset):
             segment_indices = self._get_test_indices(record)
 
         # print("Getting the items finally")
+
         try:
+            # print("Trying to obtain sample")
             sample = self.get(record, segment_indices)
         except Exception as e:
-            print(e)
+            print("Exception encountered in __getitem__: \n",e)
             sample = None
         return sample
 
+
     def get(self, record, indices):
 
+        # Stream 1 processing
         images = list()
         for seg_ind in indices:
             p = int(seg_ind)
@@ -156,6 +171,9 @@ class TSNDataSet(data.Dataset):
             vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4 = Reichardt8(out.transpose(1,2,3,0))
             # print("vp1's shape : ",vp1.shape)
             out = np.concatenate((vp1, vm1, vp2, vm2, vp3, vm3, vp4, vm4), axis=-1)
+
+            # Convert the given matrix to have values in a certain range
+            out = rescale(out, scale_min=-1,scale_max=1)
             process_data = torch.from_numpy(out).permute(3,0,1,2)
             # print("process_data: ",process_data.size())
 
@@ -163,6 +181,7 @@ class TSNDataSet(data.Dataset):
             out = process_data.numpy()
             out_list = Reichardt8(out.transpose(1,2,3,0),args.rdirs)
             out = np.concatenate(out_list, axis=-1)
+            out = rescale(out, scale_min=-1,scale_max=1)
             process_data = torch.from_numpy(out).permute(3,0,1,2)
             # print("process_data: ",process_data.size())
         
@@ -172,6 +191,23 @@ class TSNDataSet(data.Dataset):
             # print("Mean: %0.3f, Deviation: %0.3f"%(process_data.mean(),process_data.std()))
 
         # print("processed data size: ",process_data.size())
+
+        # Stream 2 processing
+        # sec_images represents the images for second stream
+        if self.two_stream is True:
+            # print("Obtaining second stream data")
+            sec_images = list()
+            for seg_ind in indices:
+                p = int(seg_ind)
+                for i in range(self.new_length):
+                    seg_imgs = self._load_image(record.path, p, override = True)
+                    sec_images.extend(seg_imgs)
+                    if p < record.num_frames:
+                        p += 1
+            dat = self.transform(sec_images)
+
+            return process_data, dat, record.label
+
         return process_data, record.label
 
     def __len__(self):

@@ -7,22 +7,27 @@ I3D Models for UCF-101
 
 | Option | Default | Meaning |
 |--------|---------|---------|
-| --epochs | 50 | . |
-| --gpus | 1 | . |
-| --lr | 0.01 | starting lr |
-| --numw | 8 | . |
-| --batch | 6 | . |
-| --testbatch | 6 | Test batch size |
 | --trainlist | ../list/trainlist01.txt | trainlist |
 | --testlist | ../list/protestlist01.txt | testlist |
-| --modality | rgb | rgb / flow / rgbdsc / flowdsc / flyflow |
-| --wts | rgb | (rgb/flow) which weights to load | 
-| --random | False | To let the first layer have random weights |
-| --ft | False | Finetune or not |
-| --mean| False | Use mean and unsquezzing or linear transformation |
-| --sched | False | Use a scheduler or not |
 | --nstr | None | name string(used to add to default name) |
+| --modality | rgb | rgb / flow / rgbdsc / flowdsc / flyflow |
+| --modality2 | None | Second stream mode: rgb / flow / rgbdsc / flowdsc / flyflow |
+| --wts | rgb | (rgb/flow) which weights to load | 
+| --mean| False | Use mean and unsquezzing or linear transformation |
+| --random | False | To let the first layer have random weights |
 | --dog | False | Use of Difference of Gaussians(not trainable) as the first filter |
+| --rdirs | [0,1,2,3,4,5,6,7] | Reichardt directions to extract |
+| --epochs | 50 | . |
+| --lr | 0.01 | starting lr |
+| --batch | 6 | . |
+| --testbatch | 6 | Test batch size |
+| --sched | False | Use a scheduler or not |
+| --lr_steps | [2,6,10,13] | scheduler steps |
+| --thres | None | Threshold the input to the network to get sparsity |
+| --gpus | 1 | . |
+| --numw | 8 | . |
+| --resume | None | Resume training or not |
+| --ft | False | Finetune or not |
 
 ## Modality details
 
@@ -47,6 +52,7 @@ Use the flow data in /mnt/data1/UCF-101_old, but transform the data from 2 chann
         * 2,3: diagnol1(2), diagnol1(-2)
         * 4,5: horizontal(3), horizontal(-3)
         * 6,7: diagnol2(4), diagnol2(-4)
+    - This is just a variant of rgbdsc with option of chosing directions
 
 
 ## List details

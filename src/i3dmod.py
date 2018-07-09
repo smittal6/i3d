@@ -1,27 +1,31 @@
 import torch
 import math
 import numpy as np
-from i3dpt import I3D
-from i3dpt import Unit3Dpy
+from i3dpt import I3D, Unit3Dpy
 from utils import kernels
 from opts import args
 
-
 class modI3D(torch.nn.Module):
 
-    def __init__(self, num_c=101, dropout_prob=0.5):
+    def __init__(self, modality, wts, dog, mean=False, random=False):
 
         super(modI3D, self).__init__()
 
-        self.num_c = num_c
-        self.mean = args.mean
-        self.random = args.random
+        # Have to be different
+        self.modality = modality
+        self.weights = wts
+        self.dog = dog
+
+        # May be common 
+        self.mean = mean
+        self.random = random
+
+        # Have to be common
         self.ft = args.ft
-        self.dog = args.dog
-        self.modality = args.modality
-        self.weights = args.wts
+
         self.transform = False
         self.path = ''
+        self.num_c = 101
         self.center_surround = None
 
         # Initialize pytorch I3D
@@ -29,7 +33,7 @@ class modI3D(torch.nn.Module):
 
         # Define the final layers
         self.avg_pool = torch.nn.AvgPool3d((2, 7, 7), (1, 1, 1))
-        self.dropout = torch.nn.Dropout(dropout_prob)
+        self.dropout = torch.nn.Dropout(0.5)
         self.conv3d_0c_1x1 = Unit3Dpy(in_channels=1024, out_channels=self.num_c, kernel_size=(1, 1, 1), activation=None, use_bias=True, use_bn=False)
         self.softmax = torch.nn.Softmax(1)
         self.configure()
