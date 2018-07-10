@@ -23,9 +23,6 @@ def Reichardt_vertical_2channels_Vectorized(video,timeDelay=1):
        Put negative values into another tensor and then concat for the two (e.g. red and green) channels
     '''
 
-    # normalize video pixel value to 0 ~ 1 (I don't think this normalizes to that range...)
-    #video = (video.astype(np.float32)) + 1e-3
-
     vc_shift_vert_by1back=np.roll(video,1,axis=1)
     vc_shift_time_by1forw=np.roll(video,-1,axis=0)
     vc_shift_vert_by1back_time_by1forw=np.roll(vc_shift_vert_by1back,-1,axis=0)
@@ -35,12 +32,6 @@ def Reichardt_vertical_2channels_Vectorized(video,timeDelay=1):
     vc_neg = -1*vc_neg
     vc = vc.clip(0)
 
-    #Expand dims may not be necessary
-    #vc=np.expand_dims(vc,len(video.shape))
-    #vc_neg=np.expand_dims(vc_neg,len(video.shape))
-
-    #Merge on the last dimension (but still separate indices)
-    #return np.concatenate((vc_neg, vc), axis=len(video.shape))
     return vc, vc_neg
 
 
@@ -49,9 +40,6 @@ def Reichardt_diagonal1_2channels_Vectorized(video,timeDelay=1):
        Reichardt-Hassenstein inspired video processing
        Put negative values into another tensor and then concat for the two (e.g. red and green) channels
     '''
-
-    # normalize video pixel value to 0 ~ 1 (I don't think this normalizes to that range...)
-    #video = (video.astype(np.float32)) + 1e-3
 
     vc_shift_diag_by1back=np.roll(video,(1,1),axis=(1,2))
     vc_shift_time_by1forw=np.roll(video,-1,axis=0)
@@ -62,11 +50,6 @@ def Reichardt_diagonal1_2channels_Vectorized(video,timeDelay=1):
     vc_neg=-1*vc_neg
     vc=vc.clip(0)
 
-    #vc=np.expand_dims(vc,len(video.shape))
-    #vc_neg=np.expand_dims(vc_neg,len(video.shape))
-
-    #Merge on the last dimension (but still separate indices)
-    #return np.concatenate((vc_neg, vc), axis=len(video.shape))
     return vc, vc_neg
 
 
@@ -76,8 +59,6 @@ def Reichardt_horizontal_2channels_Vectorized(video,timeDelay=1):
        Put negative values into another tensor and then concat for the two (e.g. red and green) channels
     '''
 
-    # normalize video pixel value to 0 ~ 1 (I don't think this normalizes to that range...)
-    #video = (video.astype(np.float32)) + 1e-3
 
     vc_shift_horz_by1back=np.roll(video,1,axis=2)
     vc_shift_time_by1forw=np.roll(video,-1,axis=0)
@@ -88,11 +69,6 @@ def Reichardt_horizontal_2channels_Vectorized(video,timeDelay=1):
     vc_neg=-1*vc_neg
     vc=vc.clip(0)
 
-    #vc=np.expand_dims(vc,len(video.shape))
-    #vc_neg=np.expand_dims(vc_neg,len(video.shape))
-
-    #Merge on the last dimension (but still separate indices)
-    #return np.concatenate((vc_neg, vc), axis=len(video.shape))
     return vc, vc_neg
 
 
@@ -102,8 +78,6 @@ def Reichardt_diagonal2_2channels_Vectorized(video,timeDelay=1):
        Put negative values into another tensor and then concat for the two (e.g. red and green) channels
     '''
 
-    # normalize video pixel value to 0 ~ 1 (I don't think this normalizes to that range...)
-    #video = (video.astype(np.float32)) + 1e-3
 
     vc_shift_diag_by1back=np.roll(video,(-1,1),axis=(1,2))
     vc_shift_time_by1forw=np.roll(video,-1,axis=0)
@@ -114,31 +88,5 @@ def Reichardt_diagonal2_2channels_Vectorized(video,timeDelay=1):
     vc_neg=-1*vc_neg
     vc=vc.clip(0)
 
-    #vc=np.expand_dims(vc,len(video.shape))
-    #vc_neg=np.expand_dims(vc_neg,len(video.shape))
-
-    #Merge on the last dimension (but still separate indices)
-    #return np.concatenate((vc_neg, vc), axis=len(video.shape))
     return vc, vc_neg
 
-def Reichardt_horizontal_vertical_2channel(video, timeDelay=1):
-
-    # normalize video pixel value to 0 ~ 1 (I don't think this normalizes to that range...)
-    #video = (video.astype(np.float32)) + 1e-3
-    # print("Input size:", video.shape)
-
-    vc_shift_vert_by1back=np.roll(video,1,axis=1)
-    vc_shift_time_by1forw=np.roll(video,-1,axis=0)
-    vc_shift_vert_by1back_time_by1forw=np.roll(vc_shift_vert_by1back,-1,axis=0)
-    vc = vc_shift_vert_by1back*vc_shift_time_by1forw - vc_shift_vert_by1back_time_by1forw*video 
-
-    vertical = vc
-
-    vc_shift_horz_by1back=np.roll(video,1,axis=2)
-    vc_shift_time_by1forw=np.roll(video,-1,axis=0)
-    vc_shift_horz_by1back_time_by1forw=np.roll(vc_shift_horz_by1back,-1,axis=0)
-    vc = vc_shift_horz_by1back*vc_shift_time_by1forw - vc_shift_horz_by1back_time_by1forw*video
-    horizontal = vc
-    # print("shape of horizontal: ",horizontal.shape)
-
-    return horizontal, vertical
