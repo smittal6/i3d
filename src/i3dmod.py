@@ -80,9 +80,7 @@ class modI3D(torch.nn.Module):
             self.adapt()
 
         if self.dog:
-            # Kernel size: 1,5,5 ### 1 along time dimension to ensure this acts like a Conv2d
-            self.center_surround = torch.nn.Conv3d(self.in_channels, self.in_channels, kernel_size=(1,5,5), stride=1, padding=(0,2,2), bias=False)
-            self.center_surround.weight = torch.nn.parameter.Parameter(torch.from_numpy(kernels()).view(1,5,5).repeat(self.in_channels, self.in_channels, 1, 1, 1).float(),requires_grad=False)
+            self.assign_dog(_size=5)
 
         if self.ft is False:
             print("Setting grads as false")
@@ -92,6 +90,17 @@ class modI3D(torch.nn.Module):
         self.i3d.cuda()
         print("Pretrained i3D shifted to CUDA")
 
+    def assign_dog(self, _size = 5):
+        # 1 along time dimension to ensure this acts like a Conv2d
+
+        # This padding is to ensure every pixel is centered at the filter window
+        _pad=int((_size-1)/2)
+
+        # in_channels, in_channels because the output will have the same shape, groups = in_channels because we want to apply the filter to each channel individually
+        self.center_surround = torch.nn.Conv3d(self.in_channels, self.in_channels, kernel_size=(1,_size,_size), stride=1, padding=(0,_pad,_pad), bias=False, groups=self.in_channels)
+
+        # repeat has 1 as second dimension as we require: (in_channels/groups), but groups = in_channel
+        self.center_surround.weight = torch.nn.parameter.Parameter(torch.from_numpy(kernels(size=_size)).view(1,_size,_size).repeat(self.in_channels, 1, 1, 1, 1).float(),requires_grad=False)
 
     def adapt(self):
         '''
