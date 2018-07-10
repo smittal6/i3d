@@ -16,8 +16,8 @@ parser.add_argument('--dog2', type=bool, default=False, help='To apply a diff of
 parser.add_argument('--rdirs', default=[0,1,2,3,4,5,6,7], type=int, nargs="+", help='Reichardt directions to extract')
 
 # ====================================== Learning configs ================================
-parser.add_argument("--epochs", help="number of iterations", type=int, default=50)
-parser.add_argument("--lr", help="Starting LR (would remain same in case of no sched)", type=float, default=1e-1)
+parser.add_argument("--epochs", help="number of iterations", type=int, default=40)
+parser.add_argument("--lr", help="Starting LR (would remain same in case of no sched)", type=float, default=1e-3)
 parser.add_argument("--batch", help="batch-size", type=int, default=6)
 parser.add_argument("--testbatch", help="test batch-size", type=int, default=6)
 parser.add_argument('--sched', type=str, default=False, help='Use a scheduler or not')
@@ -25,10 +25,10 @@ parser.add_argument('--lr_steps', default=[2,6,10,13], type=int, nargs="+", help
 parser.add_argument('--thres', type=float, default=None, help='Threshold for the flowdsc/flyflow modality, to get sparsity')
 
 # ====================================== Runtime configs ================================
-parser.add_argument("--gpus", help="Number of GPUs to train on", type=int, default=1)
+parser.add_argument("--gpus", help="Number of GPUs to train on", type=int, default=2)
 parser.add_argument("--numw", help="number of workers on loading data", type=int, default=8)
 parser.add_argument('--resume', type=str, default=None, help='Resume training from this file')
-parser.add_argument('--ft', type=bool, default=False, help='Finetune the model or not')
+parser.add_argument('--ft', type=bool, default=True, help='Finetune the model or not')
 
 # ===================================== USELESS ==========================================
 parser.add_argument("--eval", help="Just put to keep constistency with original model (rgb)", type=str, default='rgb')

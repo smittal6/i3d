@@ -33,10 +33,7 @@ eval_type = args.eval
 
 
 print("Finetune: ",str(_FT))
-if _FT:
-    _LOGDIR = '../ftlogs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
-else:
-    _LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+_LOGDIR = '../ftlogs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS)
 
 if args.nstr is not None:
     _LOGDIR = _LOGDIR + "_" + args.nstr
@@ -56,6 +53,7 @@ def get_set_loader():
     # print("W: %d, H: %d"%(new_width, new_height))
 
     pure = True if _MODALITY == 'rgb' or _MODALITY == 'flow' else False
+    modlist = ["rgb", "rgbdsc", "flyflow", "edr1"]
 
     train_transform = torchvision.transforms.Compose(
         [GroupScale(size=256),GroupRandomCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor(pure=pure)])
@@ -64,13 +62,13 @@ def get_set_loader():
         [GroupScale(size=256), GroupCenterCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor(pure=pure)])
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                               image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow", "edr1"] else "flow_"+"{}_{:05d}.jpg",
+                               image_tmpl="img_{:05d}.jpg" if _MODALITY in modlist else "flow_"+"{}_{:05d}.jpg",
                                transform=train_transform)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                              image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow", "edr1"] else "flow_"+"{}_{:05d}.jpg",
+                              image_tmpl="img_{:05d}.jpg" if _MODALITY in modlist else "flow_"+"{}_{:05d}.jpg",
                               transform=test_transform)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
