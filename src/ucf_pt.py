@@ -33,7 +33,7 @@ eval_type = args.eval
 
 
 print("Finetune: ",str(_FT))
-_LOGDIR = '../ftlogs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS)
+_LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS)
 
 if args.nstr is not None:
     _LOGDIR = _LOGDIR + "_" + args.nstr
@@ -109,6 +109,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             input_3d_var = torch.autograd.Variable(input_3d.cuda())
             if args.thres is not None:
                 input_3d_var = torch.nn.functional.threshold(input_3d_var,threshold=args.thres,value=0.0)
+
             target = torch.autograd.Variable(target.cuda())
 
             # Pytorch forward pass

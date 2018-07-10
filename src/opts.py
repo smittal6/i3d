@@ -14,6 +14,7 @@ parser.add_argument('--random', type=str, default=False, help='whether the first
 parser.add_argument('--dog', type=bool, default=False, help='To apply a diff of gaussians wts as the first layer')
 parser.add_argument('--dog2', type=bool, default=False, help='To apply a diff of gaussians wts as the first layer to second stream')
 parser.add_argument('--rdirs', default=[0,1,2,3,4,5,6,7], type=int, nargs="+", help='Reichardt directions to extract')
+parser.add_argument('--noise', type=float, default=None, help='To add gaussian noise after processing to the input')
 
 # ====================================== Learning configs ================================
 parser.add_argument("--epochs", help="number of iterations", type=int, default=40)

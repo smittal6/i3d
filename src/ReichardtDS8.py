@@ -89,4 +89,3 @@ def Reichardt_diagonal2_2channels_Vectorized(video,timeDelay=1):
     vc=vc.clip(0)
 
     return vc, vc_neg
-

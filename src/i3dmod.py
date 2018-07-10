@@ -1,9 +1,11 @@
 import torch
 import math
 import numpy as np
+
 from i3dpt import I3D, Unit3Dpy
 from utils import kernels
 from opts import args
+from torch.autograd import Variable
 
 class modI3D(torch.nn.Module):
 
@@ -86,6 +88,11 @@ class modI3D(torch.nn.Module):
             print("Setting grads as false")
             self.set_grads_false()
 
+        if args.noise is not None:
+            self.noise = Variable(torch.randn(int(args.batch/args.gpus),self.in_channels,64,224,224).cuda().normal_(std=args.noise),requires_grad=False)
+        else:
+            self.noise = None
+
         # move the i3d model to cuda
         self.i3d.cuda()
         print("Pretrained i3D shifted to CUDA")
@@ -101,6 +108,7 @@ class modI3D(torch.nn.Module):
 
         # repeat has 1 as second dimension as we require: (in_channels/groups), but groups = in_channel
         self.center_surround.weight = torch.nn.parameter.Parameter(torch.from_numpy(kernels(size=_size)).view(1,_size,_size).repeat(self.in_channels, 1, 1, 1, 1).float(),requires_grad=False)
+
 
     def adapt(self):
         '''
@@ -175,6 +183,9 @@ class modI3D(torch.nn.Module):
         if self.dog:
             inp = self.center_surround(inp)
             # print("Post DoG shape: ",inp.size())
+
+        if self.noise is not None:
+            inp = inp + self.noise
 
         out = self.i3d.conv3d_1a_7x7(inp)
         out = self.i3d.maxPool3d_2a_3x3(out)

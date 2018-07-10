@@ -5,7 +5,7 @@ I3D Models for UCF-101
 - This script uses the pretrained weights for i3d: converted from TF to PyTorch [courtesy Yana Hasson]
 - Logdir naming convention:
     ```
-    ftlogs/_MODALITY/_WTS _ _LEARNING_RATE _ EPOCHS
+    logs/_MODALITY/_WTS _ _LEARNING_RATE _ EPOCHS
     ```
 
 ## Options
