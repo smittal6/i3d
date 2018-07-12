@@ -4,6 +4,7 @@ import time
 import sys
 import torchvision
 
+from torch.autograd import Variable
 from tensorboardX import SummaryWriter
 from i3dmod import modI3D   # i3d model
 from utils import *
@@ -78,6 +79,7 @@ def get_set_loader():
 def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None):
 
     avg_loss = AverageMeter()
+    avg_time = AverageMeter()
     train_acc = AverageMeter()
 
     global j
@@ -87,6 +89,9 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
     train_points = len(train_loader)
     global_step = 1
     best_prec1 = 0.0
+
+    if args.noise is not None:
+        noise = torch.randn(6,8,64,224,224).normal_(std=args.noise).cuda()
 
     for j in range(_EPOCHS):
 
@@ -109,6 +114,10 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             input_3d_var = torch.autograd.Variable(input_3d.cuda())
             if args.thres is not None:
                 input_3d_var = torch.nn.functional.threshold(input_3d_var,threshold=args.thres,value=0.0)
+            if args.noise is not None:
+                # noise = torch.randn(input_3d.size()).normal_(std=args.noise).cuda()
+                noisev = Variable(noise)
+                input_3d_var += noisev
 
             target = torch.autograd.Variable(target.cuda())
 
@@ -124,7 +133,9 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             prec1 = accuracy(logits, target)
             train_acc.update(prec1[0],input_3d.size(0))
 
-            print("Ep: %d, Step: [%d / %d], Loss: %0.5f, Avg: %0.4f, Acc: %0.4f, Time: %0.3f" % (j+1, i+1, train_points, loss.data[0], avg_loss.avg, train_acc.avg, time.time()-start))
+            avg_time.update(time.time()-start)
+
+            print("Ep: %d, Step: [%d / %d], Loss: %0.5f, Avg: %0.4f, Acc: %0.4f, Avg_Time: %0.3f" % (j+1, i+1, train_points, loss.data[0], avg_loss.avg, train_acc.avg, avg_time.avg))
 
             train_writer.add_scalar('Loss', loss, global_step)
             train_writer.add_scalar('Avg Loss', avg_loss.avg, global_step)
