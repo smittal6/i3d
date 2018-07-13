@@ -70,7 +70,8 @@ class modI3D(torch.nn.Module):
             self.in_channels = 8
             self.transform = True
 
-        self.load_weights()
+        if args.load():
+            self.load_weights()
 
         if self.weights == 'rgb':
             print("Overriding the provided option for mean as using rgb weights [Can't transform weights from 3 dim space]")
