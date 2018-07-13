@@ -5,7 +5,6 @@ import numpy as np
 from i3dpt import I3D, Unit3Dpy
 from utils import kernels
 from opts import args
-from torch.autograd import Variable
 
 class modI3D(torch.nn.Module):
 
@@ -88,10 +87,6 @@ class modI3D(torch.nn.Module):
             print("Setting grads as false")
             self.set_grads_false()
 
-        if args.noise is not None:
-            self.noise = Variable(torch.randn(int(args.batch/args.gpus),self.in_channels,64,224,224).cuda().normal_(std=args.noise),requires_grad=False)
-        else:
-            self.noise = None
 
         # move the i3d model to cuda
         self.i3d.cuda()
@@ -184,8 +179,11 @@ class modI3D(torch.nn.Module):
             inp = self.center_surround(inp)
             # print("Post DoG shape: ",inp.size())
 
-        if self.noise is not None:
-            inp = inp + self.noise
+        # if self.noise is not None:
+            # inp = inp + self.noise
+        # if args.noise is not None:
+            # noise = Variable(torch.randn(int(args.batch/args.gpus),self.in_channels,64,224,224).cuda().normal_(std=args.noise),requires_grad=False)
+            # inp = inp + noise
 
         out = self.i3d.conv3d_1a_7x7(inp)
         out = self.i3d.maxPool3d_2a_3x3(out)

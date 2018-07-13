@@ -31,6 +31,7 @@ def rescale(matrix, scale_min=0, scale_max=255):
     Rescale matrix in a given range, element wise
     """
     matrix = matrix.astype(np.float32)
+    # matrix[np.nonzero(matrix)] = (matrix[np.nonzero(matrix)] - matrix.min()) * ((scale_max - scale_min) / np.ptp(matrix)) + scale_min
     matrix = (matrix - matrix.min()) * ((scale_max - scale_min) / np.ptp(matrix)) + scale_min
     return matrix
 

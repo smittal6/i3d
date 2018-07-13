@@ -90,8 +90,9 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
     global_step = 1
     best_prec1 = 0.0
 
-    if args.noise is not None:
-        noise = torch.randn(6,8,64,224,224).normal_(std=args.noise).cuda()
+    # if args.noise is not None:
+        # Currently only suited for rgbdsc modality, and batch_size of 6
+        # noise = torch.randn(6,8,64,224,224).normal_(std=args.noise).cuda()
 
     for j in range(_EPOCHS):
 
@@ -103,6 +104,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
 
         avg_loss.reset()
         train_acc.reset()
+        avg_time.reset()
 
         for i, (input_3d, target) in enumerate(train_loader):
 
@@ -115,7 +117,8 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             if args.thres is not None:
                 input_3d_var = torch.nn.functional.threshold(input_3d_var,threshold=args.thres,value=0.0)
             if args.noise is not None:
-                # noise = torch.randn(input_3d.size()).normal_(std=args.noise).cuda()
+                noise = torch.randn(224,224).normal_(std=args.noise)
+                noise = noise.repeat(input_3d.size(0),input_3d.size(1),input_3d.size(2),1,1).cuda()
                 noisev = Variable(noise)
                 input_3d_var += noisev
 

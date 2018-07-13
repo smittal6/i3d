@@ -1,18 +1,19 @@
 import torch.utils.data as data
 import torch
-
-from PIL import Image
 import os
 import math
 import os.path
 import numpy as np
-from numpy.random import randint
 
+from numpy.random import randint
+from PIL import Image
 from ReichardtDS8 import *
 from retina_convert import retina
 from opts import args
 from utils import rescale
 
+import warnings
+warnings.simplefilter("error")
 
 class VideoRecord(object):
     def __init__(self, row, modality):
@@ -194,7 +195,11 @@ class TSNDataSet(data.Dataset):
         elif self.modality == 'edr1':
             out = process_data.numpy()
             out = retina(out.transpose(1,2,3,0), alpha=0.5, mu_on=0.05,mu_off=-0.10)
-            out = rescale(out, scale_min=-1,scale_max=1)
+            try:
+                out = rescale(out, scale_min=-1,scale_max=1)
+            except RuntimeWarning:
+                print("Path of the video with zero error: ",record.path)
+                exit()
             process_data = torch.from_numpy(out).permute(3,0,1,2)
             # print("process_data: ",process_data.size()) # Shape ~ [2,Timesteps,H,W]
 
