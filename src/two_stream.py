@@ -1,7 +1,6 @@
 # __author__ Siddharth Mittal
 
 # This file is for two stream network only
-
 import torch
 import time
 import sys
@@ -14,6 +13,7 @@ from transforms import *    # dataset transforms
 from dataset import TSNDataSet
 from opts import args    # options(args)
 from itertools import chain
+from torch.autograd import Variable
 
 # ../model/model_rgb.pth
 # args = parser.parse_args()
@@ -37,7 +37,7 @@ eval_type = args.eval
 
 
 print("Finetune: ",str(_FT))
-_LOGDIR = '../twos_logs/' + _MODALITY + '/' + _WTS + '/' + str(args.mean) + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS) + '_' + _TRAIN_LIST.split('/')[2].split('.')[0]
+_LOGDIR = '../twos_logs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS)
 
 if args.nstr is not None:
     _LOGDIR = _LOGDIR + "_" + args.nstr
@@ -45,8 +45,8 @@ if args.nstr is not None:
 
 def get_set_loader():
 
-
     pure = True if _MODALITY == 'rgb' or _MODALITY == 'flow' else False
+    modlist = ["rgb", "rgbdsc", "flyflow", "edr1"]
 
     train_transform = torchvision.transforms.Compose(
         [GroupScale(size=256),GroupRandomCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor(pure=pure)])
@@ -55,13 +55,13 @@ def get_set_loader():
         [GroupScale(size=256), GroupCenterCrop(size=_IMAGE_SIZE), Stack(modality=_MODALITY), ToTorchFormatTensor(pure=pure)])
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                               image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow","edr1"] else "flow_"+"{}_{:05d}.jpg",
+                               image_tmpl="img_{:05d}.jpg" if _MODALITY in modlist else "flow_"+"{}_{:05d}.jpg",
                                transform=train_transform, two_stream=True)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
-                              image_tmpl="img_{:05d}.jpg" if _MODALITY in ["rgb", "rgbdsc", "flyflow","edr1"] else "flow_"+"{}_{:05d}.jpg",
+                              image_tmpl="img_{:05d}.jpg" if _MODALITY in modlist  else "flow_"+"{}_{:05d}.jpg",
                               transform=test_transform, two_stream=True)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
@@ -71,6 +71,7 @@ def get_set_loader():
 def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None):
 
     avg_loss = AverageMeter()
+    avg_time = AverageMeter()
     train_acc = AverageMeter()
 
     global j
@@ -91,6 +92,7 @@ def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, 
 
         avg_loss.reset()
         train_acc.reset()
+        avg_time.reset()
 
         for i, (input_3d, input_stream2, target) in enumerate(train_loader):
 
@@ -104,6 +106,12 @@ def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, 
             if args.thres is not None:
                 input_3d_var = torch.nn.functional.threshold(input_3d_var,threshold=args.thres,value=0.0)
                 input_stream2_var = torch.nn.functional.threshold(input_stream2_var,threshold=args.thres,value=0.0)
+
+            if args.noise is not None:
+                noise = torch.randn(224,224).normal_(std=args.noise)
+                noise = noise.repeat(input_3d.size(0),input_3d.size(1),input_3d.size(2),1,1).cuda()
+                noisev = Variable(noise)
+                input_3d_var += noisev
 
             target = torch.autograd.Variable(target.cuda())
 
@@ -123,7 +131,9 @@ def run(model, model_stream2, train_loader, criterion, optimizer, train_writer, 
             prec1 = accuracy(logits+logits2, target)
             train_acc.update(prec1[0],input_3d.size(0))
 
-            print("Ep: %d, Step: [%d / %d], Loss: %0.5f, Avg: %0.4f, Acc: %0.4f, Time: %0.3f" % (j+1, i+1, train_points, loss.data[0], avg_loss.avg, train_acc.avg, time.time()-start))
+            avg_time.update(time.time()-start)
+
+            print("Ep: %d, Step: [%d / %d], Loss: %0.5f, Avg: %0.4f, Acc: %0.4f, Time: %0.3f" % (j+1, i+1, train_points, loss.data[0], avg_loss.avg, train_acc.avg, avg_time.avg))
 
             train_writer.add_scalar('Loss', loss, global_step)
             train_writer.add_scalar('Avg Loss', avg_loss.avg, global_step)
@@ -198,7 +208,7 @@ def main():
 
     # Scheduler
     if _USE_SCHED:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=args.lr_steps)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd, milestones=args.lr_steps, gamma=0.33)
     else:
         scheduler = None
 

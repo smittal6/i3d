@@ -70,7 +70,7 @@ class modI3D(torch.nn.Module):
             self.in_channels = 8
             self.transform = True
 
-        if args.load():
+        if args.load:
             self.load_weights()
 
         if self.weights == 'rgb':
@@ -179,12 +179,6 @@ class modI3D(torch.nn.Module):
         if self.dog:
             inp = self.center_surround(inp)
             # print("Post DoG shape: ",inp.size())
-
-        # if self.noise is not None:
-            # inp = inp + self.noise
-        # if args.noise is not None:
-            # noise = Variable(torch.randn(int(args.batch/args.gpus),self.in_channels,64,224,224).cuda().normal_(std=args.noise),requires_grad=False)
-            # inp = inp + noise
 
         out = self.i3d.conv3d_1a_7x7(inp)
         out = self.i3d.maxPool3d_2a_3x3(out)

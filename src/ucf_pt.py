@@ -181,9 +181,6 @@ def main():
 
     # args order: modality, num_c, finetune, dropout
     model = modI3D(modality=_MODALITY, wts=_WTS, dog=args.dog, mean=args.mean, random=args.random)
-
-    # if args.two_stream is not False:
-        # model_stream2 = modI3D(modality='rgb', wts='rgb', dog=args.dog2)
     
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
@@ -206,7 +203,7 @@ def main():
     loss = torch.nn.CrossEntropyLoss()
     sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
     if _USE_SCHED:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=args.lr_steps)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(sgd,milestones=args.lr_steps,gamma=0.333)
     else:
         scheduler = None
 
