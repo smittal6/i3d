@@ -98,5 +98,6 @@ CUDA_VISIBLE_DEVICES="2,7" python ucf_pt.py --modality rgb --wts rgb --random Tr
 
 ## Reference
 
+- [TSN Codebase](https://github.com/yjxiong/tsn-pytorch)
 - [Yana Hasson](https://github.com/hassony2)
 - Paper [*Quo Vadis, Action Recognition? A New Model and the Kinetics Dataset*](https://arxiv.org/abs/1705.07750) by Joao Carreira and Andrew Zisserman.

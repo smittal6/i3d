@@ -98,6 +98,7 @@ def interruptHandler(args, model, writer, test_loader, best_prec1, global_step, 
 
     # find the accuracy before shutting
     acc = get_test_accuracy(model, test_loader, model_stream2)
+    print("Best Accuracy till now: %0.5f " % best_prec1)
 
     # model saving 
     if acc.data[0] > best_prec1:
