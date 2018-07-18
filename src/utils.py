@@ -70,58 +70,50 @@ def get_test_accuracy(model, test_loader, model_stream2=None):
             accs.append(accuracy(output, labels))
 
     else:
-        model_stream2.eval()
         for i, (test1, test2, labels) in enumerate(tqdm(test_loader)):
             # print("test batch number: ",i)
             test1 = torch.autograd.Variable(test1.cuda(), volatile=True)
             test2 = torch.autograd.Variable(test2.cuda(), volatile=True)
             labels = torch.autograd.Variable(labels.cuda())
-            _, output1 = model(test1)
-            _, output2 = model_stream2(test2)
-            accs.append(accuracy(output1 + output2, labels))
+            _, output = model(test1,test2)
+            accs.append(accuracy(output, labels))
 
-        model_stream2.train()
 
     print("--------\t\t\tCurrent Test Accuracy: %0.5f " % np.mean(accs))
     model.train()
     return np.mean(accs)
 
 
-def save_checkpoint(args, state, is_best, filename='checkpoint_4B.pth.tar'):
-    filename = '_'.join((args.modality.lower(), filename))
-    torch.save(state, filename)
+def save_checkpoint(args, state, is_best, filename):
+    checkname = '_'.join((filename,'checkpoint.pth.tar'))
+    torch.save(state, checkname)
     if is_best:
-        best_name = '_'.join((args.modality.lower(), 'model_best_4B.pth.tar'))
-        shutil.copyfile(filename, best_name)
+        best_name = '_'.join((filename, 'best_model.pth.tar'))
+        shutil.copyfile(checkname, best_name)
 
-def interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j, model_stream2=None):
+def interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j, save_name, model_stream2=None):
 
     # find the accuracy before shutting
     acc = get_test_accuracy(model, test_loader, model_stream2)
     print("Best Accuracy till now: %0.5f " % best_prec1)
 
-    # model saving 
-    if acc.data[0] > best_prec1:
+    is_best = acc.data[0] > best_prec1
+    if is_best:
         print("Saving this model as the best.")
         best_prec1 = acc.data[0]
-        print("Best Accuracy till now: %0.5f " % best_prec1)
-        save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
+        print("Best Accuracy now: %0.5f " % best_prec1)
+
+        state_dict = {'epoch':j,'state_dict':model.state_dict(),'best_prec1':best_prec1,'optim':optimizer.state_dict()}
+        save_checkpoint(args, state_dict, is_best, save_name)
 
     # store the grads
     print("Storing the gradients for Tensorboard")
 
-    if model_stream2 is None:
-        for name, param in model.named_parameters():
-            if param.requires_grad and param.grad is not None:
-                # print("Histogram for[Name]: ",name)
-                writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step+1)
-                writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step+1)
-    else:
-        for name, param in chain(model.named_parameters(),model_stream2.named_parameters()):
-            if param.requires_grad and param.grad is not None:
-                # print("Histogram for[Name]: ",name)
-                writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step+1)
-                writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step+1)
+    for name, param in model.named_parameters():
+        if param.requires_grad and param.grad is not None:
+            # print("Histogram for[Name]: ",name)
+            writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step+1)
+            writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step+1)
 
 
 def default_collate(batch):

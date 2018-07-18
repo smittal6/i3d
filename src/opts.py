@@ -9,15 +9,16 @@ parser.add_argument('--nstr', type=str, default=None, help='string to help in lo
 # ====================================== Model Configs =====================================
 parser.add_argument('--modality', type=str, default='rgb', help='rgb / rgbdsc / flow / flowdsc / flyflow')
 parser.add_argument('--wts', type=str, default='rgb', help='rgb/flow')
-parser.add_argument('--load', type=bool, default=True, help='To load the weights or start with random')
-parser.add_argument('--mean', type=bool, default=False, help='While transforming the weights use mean or not')
+parser.add_argument('--load', action='store_false', help='To load the weights or start with random')
+parser.add_argument('--mean', action='store_true', default=False, help='While transforming the weights use mean or not')
 parser.add_argument('--random', type=str, default=False, help='whether the first layer should have random weights')
-parser.add_argument('--dog', type=bool, default=False, help='To apply a diff of gaussians wts as the first layer')
-parser.add_argument('--dog2', type=bool, default=False, help='To apply a diff of gaussians wts as the first layer to second stream')
+parser.add_argument('--dog', action='store_true', default=False, help='To apply a diff of gaussians wts as the first layer')
+parser.add_argument('--dog2', action='store_true', default=False, help='To apply a diff of gaussians wts as the first layer to second stream')
 parser.add_argument('--rdirs', default=[0,1,2,3,4,5,6,7], type=int, nargs="+", help='Reichardt directions to extract')
 parser.add_argument('--noise', type=float, default=None, help='To add gaussian noise after processing to the input')
 
 # ====================================== Learning configs ================================
+parser.add_argument("--start_epoch", help="Starting epoch", type=int, default=0)
 parser.add_argument("--epochs", help="number of iterations", type=int, default=40)
 parser.add_argument("--lr", help="Starting LR (would remain same in case of no sched)", type=float, default=1e-3)
 parser.add_argument("--batch", help="batch-size", type=int, default=6)
@@ -36,3 +37,4 @@ parser.add_argument('--ft', type=bool, default=True, help='Finetune the model or
 parser.add_argument("--eval", help="Just put to keep constistency with original model (rgb)", type=str, default='rgb')
 
 args = parser.parse_args()
+print("in opts: ",str(args.load))
