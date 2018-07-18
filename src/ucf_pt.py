@@ -32,6 +32,7 @@ _WTS = args.wts
 _FT = args.ft
 eval_type = args.eval
 
+save_name = '../saves/single/' + str(args.load) + '/' + _MODALITY + '_' + _WTS
 
 print("Finetune: ",str(_FT))
 _LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS)
@@ -39,19 +40,8 @@ _LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' 
 if args.nstr is not None:
     _LOGDIR = _LOGDIR + "_" + args.nstr
 
-
 def get_set_loader():
 
-    # i_h = 240
-    # i_w = 320
-
-    # Take the min value, and use it for the ratio
-    # min_ = min(i_w, i_h)
-    # ratio = float(min_) / 256
-
-    # new_width = int(float(i_w) / ratio)
-    # new_height = int(float(i_h) / ratio)
-    # print("W: %d, H: %d"%(new_width, new_height))
 
     pure = True if _MODALITY == 'rgb' or _MODALITY == 'flow' else False
     modlist = ["rgb", "rgbdsc", "flyflow", "edr1"]
@@ -94,7 +84,7 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
         # Currently only suited for rgbdsc modality, and batch_size of 6
         # noise = torch.randn(6,8,64,224,224).normal_(std=args.noise).cuda()
 
-    for j in range(_EPOCHS):
+    for j in range(args.start_epoch, _EPOCHS):
 
         print("Epoch Number: %d" % (j + 1))
         if scheduler is not None:
@@ -153,7 +143,6 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
                         train_writer.add_histogram(name, param.clone().cpu().data.numpy(),global_step)
                         train_writer.add_histogram(name + '/gradient', param.grad.clone().cpu().data.numpy(),global_step)
 
-            
             optimizer.zero_grad()
             global_step += 1
 
@@ -162,11 +151,15 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
             acc = get_test_accuracy(model, test_loader)
             train_writer.add_scalar('Test Acc', acc.data[0], global_step)
             print("Best Accuracy till now: %0.5f " % best_prec1)
-            if acc.data[0] > best_prec1:
+            
+            is_best = acc.data[0] > best_prec1
+            if is_best:
                 print("Saving this model as the best.")
                 best_prec1 = acc.data[0]
-                print("Best Accuracy till now: %0.5f " % best_prec1)
-                save_checkpoint(args, {'epoch': j + 1,'state_dict': model.state_dict(),'best_prec1': best_prec1}, True)
+                print("Best Accuracy now: %0.5f " % best_prec1)
+
+            state_dict = {'epoch':j,'state_dict':model.state_dict(),'best_prec1':best_prec1,'optim':optimizer.state_dict()}
+            save_checkpoint(args, state_dict, is_best, save_name)
 
     get_test_accuracy(model, test_loader)
     train_writer.close()
@@ -176,24 +169,26 @@ def main():
     global j
     global global_step
     global best_prec1
+    print("Logged in: ",_LOGDIR)
 
     train_loader, test_loader = get_set_loader()
 
     # args order: modality, num_c, finetune, dropout
-    model = modI3D(modality=_MODALITY, wts=_WTS, dog=args.dog, mean=args.mean, random=args.random)
+    # print("\n\nargs.load in main: ",str(args.load))
+    model = modI3D(modality=_MODALITY, wts=_WTS, dog=args.dog, load=args.load, mean=args.mean, random=args.random)
     
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
 
     if args.resume:
-        if os.path.isfile(args.resume):
-            print("=> loading checkpoint '{}'".format(args.resume))
-            checkpoint = torch.load(args.resume)
-            args.start_epoch = checkpoint['epoch']
-            best_prec1 = checkpoint['best_prec1']
-            model.load_state_dict(checkpoint['state_dict'])
-            #optimizer.load_state_dict(checkpoint['optimizer'])
-            print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
+        # if os.path.isfile(args.resume):
+        print("===> loading checkpoint '{}'".format(save_name))
+        checkpoint = torch.load(save_name + '_best_model.pth.tar')
+        args.start_epoch = checkpoint['epoch']
+        best_prec1 = checkpoint['best_prec1']
+        model.load_state_dict(checkpoint['state_dict'])
+        optimizer.load_state_dict(checkpoint['optim'])
+        print("====> Running now from epoch {})".format(args.resume, checkpoint['epoch']))
 
     print_learnables(model)
     model.train()
@@ -214,7 +209,7 @@ def main():
     except KeyboardInterrupt:
         answer = input("Do you want to save the model and the current running statistics? [y or n]\n")
         if answer == 'y':
-            interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j)
+            interruptHandler(args, model, writer, test_loader, best_prec1, global_step, j, save_name)
         else:
             print("Exiting without saving anything")
 
