@@ -8,7 +8,7 @@ from opts import args
 
 class modI3D(torch.nn.Module):
 
-    def __init__(self, modality, wts, dog, mean=False, random=False):
+    def __init__(self, modality, wts, dog, load, mean=False, random=False):
 
         super(modI3D, self).__init__()
 
@@ -16,6 +16,7 @@ class modI3D(torch.nn.Module):
         self.modality = modality
         self.weights = wts
         self.dog = dog
+        self.load = load
 
         # May be common 
         self.mean = mean
@@ -70,7 +71,8 @@ class modI3D(torch.nn.Module):
             self.in_channels = 8
             self.transform = True
 
-        if args.load:
+        if self.load:
+            # print("Load option provided: ",str(self.load))
             self.load_weights()
 
         if self.weights == 'rgb':
@@ -91,7 +93,7 @@ class modI3D(torch.nn.Module):
 
         # move the i3d model to cuda
         self.i3d.cuda()
-        print("Pretrained i3D shifted to CUDA")
+        print("i3D shifted to CUDA")
 
     def assign_dog(self, _size = 5):
         # 1 along time dimension to ensure this acts like a Conv2d
@@ -111,6 +113,8 @@ class modI3D(torch.nn.Module):
         Adapts the weights of the first convolutional layer in accordance with the number of channels in input
         :return:
         '''
+
+        print("Adapting the weights to suit the input and user reqs")
 
         old_inchannels = self.i3d.conv3d_1a_7x7.conv3d.in_channels
         weight_3d = self.i3d.conv3d_1a_7x7.conv3d.weight.data
@@ -206,3 +210,20 @@ class modI3D(torch.nn.Module):
         out_logits = out
         out = self.softmax(out_logits)
         return out, out_logits
+
+
+class TwoStream(torch.nn.Module):
+
+    def __init__(self):
+
+        super(TwoStream, self).__init__()
+
+        self.stream1 = modI3D(modality=args.modality, wts=args.wts, dog=args.dog, load=args.load, mean=args.mean, random=args.random)
+        self.stream2 = modI3D(modality='rgb', wts='rgb', dog=args.dog2, load=True, random=False)
+        self.softmax = torch.nn.Softmax(1)
+
+    def forward(self, input1, input2):
+        _, logits1 = self.stream1(input1)
+        _, logits2 = self.stream2(input2)
+        out_pt = self.softmax(logits1+logits2)
+        return out_pt, logits1+logits2
