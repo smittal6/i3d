@@ -176,6 +176,7 @@ def main():
     global global_step
     global best_prec1
     print("Logged in: ",_LOGDIR)
+    print("Model save name: ",save_name)
 
     train_loader, test_loader = get_set_loader()
 
@@ -186,7 +187,6 @@ def main():
     
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
-        # model_stream2 = torch.nn.DataParallel(model_stream2)
 
     if args.resume:
         # if os.path.isfile(args.resume):
@@ -199,20 +199,19 @@ def main():
         print("====> Running now from epoch {})".format(args.resume, checkpoint['epoch']))
 
     print_learnables(model)
-    # print_learnables(model_stream2)
 
     model.train()
     model.cuda()
 
-    # model_stream2.train()
-    # model_stream2.cuda()
 
     # with cross entropy loss we don't require to compute softmax, nor do we need one-hot encodings
     loss = torch.nn.CrossEntropyLoss()
+
     # stream1_learn = list(filter(lambda p: p.requires_grad, model.parameters()))
     # stream2_learn = list(filter(lambda p: p.requires_grad, model_stream2.parameters()))
     # control_params = stream1_learn + stream2_learn
     # sgd = torch.optim.SGD(control_params, lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
+
     sgd = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=_LEARNING_RATE, momentum=0.9, weight_decay=1e-7)
 
     # Scheduler

@@ -6,7 +6,7 @@ import torchvision
 
 from torch.autograd import Variable
 from tensorboardX import SummaryWriter
-from i3dmod import modI3D   # i3d model
+from i3dmod import modI3D, smallI3D   # i3d model
 from utils import *
 from transforms import *    # dataset transforms
 from dataset import TSNDataSet
@@ -63,7 +63,6 @@ def get_set_loader():
                               transform=test_transform)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
-
     return train_loader, test_loader
 
 def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test_loader=None):
@@ -164,18 +163,23 @@ def run(model, train_loader, criterion, optimizer, train_writer, scheduler, test
     get_test_accuracy(model, test_loader)
     train_writer.close()
 
-
 def main():
     global j
     global global_step
     global best_prec1
     print("Logged in: ",_LOGDIR)
+    print("Model save name: ",save_name)
 
     train_loader, test_loader = get_set_loader()
 
     # args order: modality, num_c, finetune, dropout
     # print("\n\nargs.load in main: ",str(args.load))
-    model = modI3D(modality=_MODALITY, wts=_WTS, dog=args.dog, load=args.load, mean=args.mean, random=args.random)
+
+    if args.small:
+        # load has to become false now because can't load the weights straight away
+        model = smallI3D(modality=_MODALITY, wts=_WTS, dog=args.dog, load=False, mean=args.mean, random=args.random)
+    else:
+        model = modI3D(modality=_MODALITY, wts=_WTS, dog=args.dog, load=args.load, mean=args.mean, random=args.random)
     
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)

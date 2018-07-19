@@ -212,6 +212,69 @@ class modI3D(torch.nn.Module):
         return out, out_logits
 
 
+class smallI3D(torch.nn.Module):
+    '''
+        A less heavy version of i3D
+        The two deepest mixed units are jinxed: mixed_5b and mixed_5c
+        This model has roughly 20% less parameters.
+
+        Param count:
+            Model: 25 Million
+            Mixed_5b: 19,74,272
+            Mixed_5c: 27,84,736
+        So removing 5b and 5c removes around ~5 million params
+    '''
+
+
+    def __init__(self, modality, wts, dog, load, mean=False, random=False):
+
+        super(smallI3D, self).__init__()
+
+        self.mod = modI3D(modality,wts,dog,load,mean,random)
+
+        # 832 is calculated from the network design
+        self.mod.conv3d_0c_1x1 = Unit3Dpy(in_channels=832, out_channels=self.mod.num_c, kernel_size=(1, 1, 1), activation=None, use_bias=True, use_bn=False)
+        del self.mod.i3d.mixed_5b
+        del self.mod.i3d.mixed_5c
+
+    def forward(self, inp):
+        # Loaded i3D section
+
+        if self.mod.dog:
+            inp = self.mod.center_surround(inp)
+            # print("Post DoG shape: ",inp.size())
+
+        out = self.mod.i3d.conv3d_1a_7x7(inp)
+        out = self.mod.i3d.maxPool3d_2a_3x3(out)
+        out = self.mod.i3d.conv3d_2b_1x1(out)
+        out = self.mod.i3d.conv3d_2c_3x3(out)
+        out = self.mod.i3d.maxPool3d_3a_3x3(out)
+        out = self.mod.i3d.mixed_3b(out)
+        out = self.mod.i3d.mixed_3c(out)
+        out = self.mod.i3d.maxPool3d_4a_3x3(out)
+        out = self.mod.i3d.mixed_4b(out)
+        out = self.mod.i3d.mixed_4c(out)
+        out = self.mod.i3d.mixed_4d(out)
+        out = self.mod.i3d.mixed_4e(out)
+        out = self.mod.i3d.mixed_4f(out)
+        out = self.mod.i3d.maxPool3d_5a_2x2(out) # 832 channels after this
+
+        # ----- Not to do this --------
+        # out = self.mod.i3d.mixed_5b(out)
+        # out = self.mod.i3d.mixed_5c(out) # 1024 channels after this
+        # -----------------------------
+
+        out = self.mod.i3d.avg_pool(out) # still 832 channels
+        out = self.mod.dropout(out)
+        out = self.mod.conv3d_0c_1x1(out)
+        out = out.squeeze(3)
+        out = out.squeeze(3)
+        out = out.mean(2)
+        out_logits = out
+        out = self.mod.softmax(out_logits)
+        return out, out_logits
+
+
 class TwoStream(torch.nn.Module):
 
     def __init__(self):
