@@ -26,26 +26,29 @@ class modI3D(torch.nn.Module):
         self.ft = args.ft
 
         self.transform = False
-        self.path = ''
+
+        if self.weights == 'rgb':
+            self.path = '../model/model_rgb.pth'
+        else:
+            self.path = '../model/model_flow.pth'
+
         self.num_c = 101
         self.center_surround = None
 
         # Initialize pytorch I3D
         self.i3d = I3D(num_classes=400, dropout_prob=0.5, modality=self.weights)
 
-        # Define the final layers
-        self.avg_pool = torch.nn.AvgPool3d((2, 7, 7), (1, 1, 1))
-        self.dropout = torch.nn.Dropout(0.5)
-        self.conv3d_0c_1x1 = Unit3Dpy(in_channels=1024, out_channels=self.num_c, kernel_size=(1, 1, 1), activation=None, use_bias=True, use_bn=False)
-        self.softmax = torch.nn.Softmax(1)
+        # Load the weights to ensure the saved ones match the model
+        if self.load:
+            self.load_weights()
+
+        # Define the final layer
+        self.i3d.conv3d_0c_1x1 = Unit3Dpy(in_channels=1024, out_channels=self.num_c, kernel_size=(1, 1, 1), activation=None, use_bias=True, use_bn=False)
+
         self.configure()
 
     def configure(self):
 
-        if self.weights == 'rgb':
-            self.path = '../model/model_rgb.pth'
-        else:
-            self.path = '../model/model_flow.pth'
 
         if self.modality == 'rgb':
             self.in_channels = 3
@@ -71,9 +74,6 @@ class modI3D(torch.nn.Module):
             self.in_channels = 8
             self.transform = True
 
-        if self.load:
-            # print("Load option provided: ",str(self.load))
-            self.load_weights()
 
         if self.weights == 'rgb':
             print("Overriding the provided option for mean as using rgb weights [Can't transform weights from 3 dim space]")
@@ -89,7 +89,6 @@ class modI3D(torch.nn.Module):
         if self.ft is False:
             print("Setting grads as false")
             self.set_grads_false()
-
 
         # move the i3d model to cuda
         self.i3d.cuda()
@@ -169,8 +168,6 @@ class modI3D(torch.nn.Module):
         self.i3d.load_state_dict(torch.load(self.path))
         print("Pretrained i3D weights restored")
 
-        # print("Shape of weights: ",self.i3d.conv3d_1a_7x7.conv3d.weight.data.size())
-        # i3nception_pt.train()
 
     def set_grads_false(self):
         for name, param in self.i3d.named_parameters():
@@ -178,37 +175,13 @@ class modI3D(torch.nn.Module):
             param.requires_grad = False
 
     def forward(self, inp):
-        # Loaded i3D section
 
         if self.dog:
             inp = self.center_surround(inp)
             # print("Post DoG shape: ",inp.size())
 
-        out = self.i3d.conv3d_1a_7x7(inp)
-        out = self.i3d.maxPool3d_2a_3x3(out)
-        out = self.i3d.conv3d_2b_1x1(out)
-        out = self.i3d.conv3d_2c_3x3(out)
-        out = self.i3d.maxPool3d_3a_3x3(out)
-        out = self.i3d.mixed_3b(out)
-        out = self.i3d.mixed_3c(out)
-        out = self.i3d.maxPool3d_4a_3x3(out)
-        out = self.i3d.mixed_4b(out)
-        out = self.i3d.mixed_4c(out)
-        out = self.i3d.mixed_4d(out)
-        out = self.i3d.mixed_4e(out)
-        out = self.i3d.mixed_4f(out)
-        out = self.i3d.maxPool3d_5a_2x2(out)
-        out = self.i3d.mixed_5b(out)
-        out = self.i3d.mixed_5c(out)
-
-        out = self.avg_pool(out)
-        out = self.dropout(out)
-        out = self.conv3d_0c_1x1(out)
-        out = out.squeeze(3)
-        out = out.squeeze(3)
-        out = out.mean(2)
-        out_logits = out
-        out = self.softmax(out_logits)
+        # Use the i3d's forward pass function
+        out, out_logits = self.i3d(inp)
         return out, out_logits
 
 
@@ -233,7 +206,7 @@ class smallI3D(torch.nn.Module):
         self.mod = modI3D(modality,wts,dog,load,mean,random)
 
         # 832 is calculated from the network design
-        self.mod.conv3d_0c_1x1 = Unit3Dpy(in_channels=832, out_channels=self.mod.num_c, kernel_size=(1, 1, 1), activation=None, use_bias=True, use_bn=False)
+        self.mod.i3d.conv3d_0c_1x1 = Unit3Dpy(in_channels=832, out_channels=self.mod.num_c, kernel_size=(1, 1, 1), activation=None, use_bias=True, use_bn=False)
         del self.mod.i3d.mixed_5b
         del self.mod.i3d.mixed_5c
 
@@ -265,13 +238,13 @@ class smallI3D(torch.nn.Module):
         # -----------------------------
 
         out = self.mod.i3d.avg_pool(out) # still 832 channels
-        out = self.mod.dropout(out)
-        out = self.mod.conv3d_0c_1x1(out)
+        out = self.mod.i3d.dropout(out)
+        out = self.mod.i3d.conv3d_0c_1x1(out)
         out = out.squeeze(3)
         out = out.squeeze(3)
         out = out.mean(2)
         out_logits = out
-        out = self.mod.softmax(out_logits)
+        out = self.mod.i3d.softmax(out_logits)
         return out, out_logits
 
 

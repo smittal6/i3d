@@ -38,4 +38,4 @@ parser.add_argument('--ft', type=bool, default=True, help='Finetune the model or
 parser.add_argument("--eval", help="Just put to keep constistency with original model (rgb)", type=str, default='rgb')
 
 args = parser.parse_args()
-print("in opts: ",str(args.load))
+# print("in opts: ",str(args.load))
