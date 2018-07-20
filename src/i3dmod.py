@@ -166,7 +166,7 @@ class modI3D(torch.nn.Module):
 
         self.i3d.eval()
         self.i3d.load_state_dict(torch.load(self.path))
-        print("Pretrained i3D weights restored")
+        print("\n\nPretrained i3D weights restored\n\n")
 
 
     def set_grads_false(self):
@@ -202,6 +202,7 @@ class smallI3D(torch.nn.Module):
     def __init__(self, modality, wts, dog, load, mean=False, random=False):
 
         super(smallI3D, self).__init__()
+        print("Begin init for Lighter i3D")
 
         self.mod = modI3D(modality,wts,dog,load,mean,random)
 

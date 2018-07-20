@@ -32,13 +32,14 @@ _WTS = args.wts
 _FT = args.ft
 eval_type = args.eval
 
-save_name = '../saves/single/' + str(args.load) + '/' + _MODALITY + '_' + _WTS
+save_name = '../saves/single/' + str(args.load) + '/' + _MODALITY + '_' + _WTS + '_' + str(_EPOCHS)
 
 print("Finetune: ",str(_FT))
 _LOGDIR = '../logs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS)
 
 if args.nstr is not None:
     _LOGDIR = _LOGDIR + "_" + args.nstr
+    save_name = save_name + "_" + args.nstr
 
 def get_set_loader():
 
