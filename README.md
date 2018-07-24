@@ -37,7 +37,7 @@ I3D Models for UCF-101
 | --thres | None | Threshold the input to the network to get sparsity |
 | --gpus | 1 | . |
 | --numw | 8 | . |
-| --resume | None | Resume training or not |
+| --resume | None | Resume training(specify the file) or not |
 | --ft | True | Finetune or not |
 
 ## Modality details
@@ -104,6 +104,7 @@ CUDA_VISIBLE_DEVICES="2,7" python ucf_pt.py --modality rgb --wts rgb --random Tr
 
 ## Reference
 
+- [Deepmind i3D](https://github.com/deepmind/kinetics-i3d/)
 - [TSN Codebase](https://github.com/yjxiong/tsn-pytorch)
 - [Yana Hasson](https://github.com/hassony2)
 - Paper [*Quo Vadis, Action Recognition? A New Model and the Kinetics Dataset*](https://arxiv.org/abs/1705.07750) by Joao Carreira and Andrew Zisserman.
