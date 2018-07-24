@@ -7,6 +7,12 @@ I3D Models for UCF-101
     ```
     logs/_MODALITY/_WTS _ _LEARNING_RATE _ EPOCHS
     ```
+## Dependencies
+
+- pytorch=0.3
+- tensorboardX
+- tqdm
+- torchvision
 
 ## Options
 

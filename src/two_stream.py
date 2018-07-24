@@ -35,7 +35,7 @@ _WTS = args.wts
 _FT = args.ft
 eval_type = args.eval
 
-save_name = '../saves/both/' + str(args.load) + '/' + _MODALITY + '_' + _WTS
+save_name = '../saves/both/' + str(args.load) + '/' + _MODALITY + '_' + _WTS + '_' + str(_EPOCHS)
 
 print("Finetune: ",str(_FT))
 _LOGDIR = '../twos_logs/' + _MODALITY + '/' + _WTS + '_' + str(_LEARNING_RATE) + '_' + str(_EPOCHS)
@@ -188,15 +188,6 @@ def main():
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
 
-    if args.resume:
-        # if os.path.isfile(args.resume):
-        print("===> loading checkpoint '{}'".format(save_name))
-        checkpoint = torch.load(save_name + '_best_model.pth.tar')
-        args.start_epoch = checkpoint['epoch']
-        best_prec1 = checkpoint['best_prec1']
-        model.load_state_dict(checkpoint['state_dict'])
-        optimizer.load_state_dict(checkpoint['optim'])
-        print("====> Running now from epoch {})".format(args.resume, checkpoint['epoch']))
 
     print_learnables(model)
 
@@ -222,6 +213,16 @@ def main():
 
     # Summary Writer
     writer = SummaryWriter(_LOGDIR)
+
+    if args.resume:
+        # if os.path.isfile(args.resume):
+        print("===> loading checkpoint '{}'".format(args.resume))
+        checkpoint = torch.load(args.resume)
+        args.start_epoch = checkpoint['epoch']
+        best_prec1 = checkpoint['best_prec1']
+        model.load_state_dict(checkpoint['state_dict'])
+        sgd.load_state_dict(checkpoint['optim'])
+        print("====> Running now from epoch {})".format(args.resume, checkpoint['epoch']))
 
     try:
         run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)

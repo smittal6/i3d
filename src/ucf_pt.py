@@ -185,15 +185,6 @@ def main():
     if _NUM_GPUS > 1:
         model = torch.nn.DataParallel(model)
 
-    if args.resume:
-        # if os.path.isfile(args.resume):
-        print("===> loading checkpoint '{}'".format(save_name))
-        checkpoint = torch.load(save_name + '_best_model.pth.tar')
-        args.start_epoch = checkpoint['epoch']
-        best_prec1 = checkpoint['best_prec1']
-        model.load_state_dict(checkpoint['state_dict'])
-        optimizer.load_state_dict(checkpoint['optim'])
-        print("====> Running now from epoch {})".format(args.resume, checkpoint['epoch']))
 
     print_learnables(model)
     model.train()
@@ -208,6 +199,16 @@ def main():
         scheduler = None
 
     writer = SummaryWriter(_LOGDIR)
+
+    if args.resume:
+        # if os.path.isfile(args.resume):
+        print("===> loading checkpoint '{}'".format(args.resume))
+        checkpoint = torch.load(args.resume)
+        args.start_epoch = checkpoint['epoch']
+        best_prec1 = checkpoint['best_prec1']
+        model.load_state_dict(checkpoint['state_dict'])
+        sgd.load_state_dict(checkpoint['optim'])
+        print("====> Running now from epoch {})".format(args.resume, checkpoint['epoch']))
 
     try:
         run(model, train_loader, loss, sgd, writer, scheduler, test_loader=test_loader)
