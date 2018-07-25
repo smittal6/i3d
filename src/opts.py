@@ -8,8 +8,10 @@ parser.add_argument('--nstr', type=str, default=None, help='string to help in lo
 
 # ====================================== Model Configs =====================================
 parser.add_argument('--modality', type=str, default='rgb', help='rgb / rgbdsc / flow / flowdsc / flyflow')
+parser.add_argument('--mod2', type=str, default=None, help='edr1 / rgb')
 parser.add_argument('--wts', type=str, default='rgb', help='rgb/flow')
 parser.add_argument('--load', action='store_false', help='To load the weights or start with random')
+parser.add_argument('--load2', action='store_false', help='To load the weights for stream 2 or start with random')
 parser.add_argument('--small', action='store_true', help='To get the smaller i3d model')
 parser.add_argument('--mean', action='store_true', default=False, help='While transforming the weights use mean or not')
 parser.add_argument('--random', type=str, default=False, help='whether the first layer should have random weights')

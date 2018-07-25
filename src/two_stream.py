@@ -57,13 +57,13 @@ def get_set_loader():
 
     train_dataset = TSNDataSet("", _TRAIN_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
                                image_tmpl="img_{:05d}.jpg" if _MODALITY in modlist else "flow_"+"{}_{:05d}.jpg",
-                               transform=train_transform, two_stream=True)
+                               transform=train_transform, mod2=args.mod2)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 
     test_dataset = TSNDataSet("", _TEST_LIST, num_segments=1, new_length=64, modality=_MODALITY, 
                               image_tmpl="img_{:05d}.jpg" if _MODALITY in modlist  else "flow_"+"{}_{:05d}.jpg",
-                              transform=test_transform, two_stream=True)
+                              transform=test_transform, mod2=args.mod2)
 
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=_TEST_BATCH_SIZE, shuffle=True, num_workers=_NUM_W, collate_fn=my_collate)
 

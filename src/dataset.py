@@ -42,7 +42,7 @@ class TSNDataSet(data.Dataset):
     def __init__(self, root_path, list_file,
                  num_segments=3, new_length=1, modality='rgb',
                  image_tmpl='img_{:05d}.jpg', transform=None,
-                 force_grayscale=False, random_shift=True, test_mode=False, two_stream = False):
+                 force_grayscale=False, random_shift=True, test_mode=False, mod2 = None):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -52,9 +52,14 @@ class TSNDataSet(data.Dataset):
         self.image_tmpl = image_tmpl
         self.transform = transform
         self.random_shift = random_shift
+        self.mod2 = mod2
         self.test_mode = test_mode
-        self.two_stream = two_stream
         self.rgb_format = 'img_{:05d}.jpg'
+
+
+        self.list1 = ['rgb','RGBEDR','RGBDiff','MulEDR']
+        self.list2 = ['edr1','rgbdsc','flyflow']
+        self.list3 = ['flow','flowdsc']
 
         # if self.modality in ['RGBDiff', 'EDR', 'GrayDiff', 'RGBEDR', 'MulEDR']:
             # self.new_length += 1# Diff needs one more image to calculate diff
@@ -73,19 +78,23 @@ class TSNDataSet(data.Dataset):
             # x component is the first
             self.basis = torch.from_numpy(np.asarray(trans)) # 8 rows and 2 columns
 
-    def _load_image(self, directory, idx, override = False):
+    def _load_image(self, directory, idx, mod):
         '''
         Override represents the case when we have to load data for stream two, which will be rgb
         '''
         # print("Index: ",idx)
-        if override or self.modality == 'rgb' or self.modality == 'RGBDiff' or self.modality == 'RGBEDR' or self.modality == 'MulEDR':
+        # if override or self.modality == 'rgb' or self.modality == 'RGBDiff' or self.modality == 'RGBEDR' or self.modality == 'MulEDR':
+        if mod in self.list1:
             # print("Entering override")
             # print(str(os.path.join(directory, self.rgb_format.format(idx))))
             ret = [Image.open(os.path.join(directory, self.rgb_format.format(idx))).convert('RGB')]
-        elif self.modality == 'edr1' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc' or self.modality == 'flyflow':
+        # elif self.modality == 'edr1' or self.modality == 'GrayDiff' or self.modality == 'rgbdsc' or self.modality == 'flyflow':
+        elif mod in self.list2:
             # Grayscale
+            # print("picking up greyscale for edr1")
             ret = [Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('L')]
-        elif self.modality == 'flow' or self.modality == 'flowdsc':
+        # elif self.modality == 'flow' or self.modality == 'flowdsc':
+        elif mod in self.list3:
             x_img = Image.open(os.path.join(directory, self.image_tmpl.format('x', idx))).convert('L')
             y_img = Image.open(os.path.join(directory, self.image_tmpl.format('y', idx))).convert('L')
             ret = [x_img, y_img]
@@ -156,7 +165,7 @@ class TSNDataSet(data.Dataset):
         for seg_ind in indices:
             p = int(seg_ind)
             for i in range(self.new_length):
-                seg_imgs = self._load_image(record.path, p)
+                seg_imgs = self._load_image(record.path, p, self.modality)
                 images.extend(seg_imgs)
                 if p < record.num_frames:
                     p += 1
@@ -207,17 +216,27 @@ class TSNDataSet(data.Dataset):
 
         # Stream 2 processing
         # sec_images represents the images for second stream
-        if self.two_stream is True:
+        if self.mod2 is not None:
             # print("Obtaining second stream data")
             sec_images = list()
             for seg_ind in indices:
                 p = int(seg_ind)
                 for i in range(self.new_length):
-                    seg_imgs = self._load_image(record.path, p, override = True)
+                    seg_imgs = self._load_image(record.path, p, self.mod2)
                     sec_images.extend(seg_imgs)
                     if p < record.num_frames:
                         p += 1
             dat = self.transform(sec_images)
+
+            if self.mod2 == 'edr1':
+                dat = dat.numpy()
+                dat = retina(dat.transpose(1,2,3,0), alpha=0.5, mu_on=0.05,mu_off=-0.10)
+                try:
+                    dat = rescale(dat, scale_min=-1,scale_max=1)
+                except RuntimeWarning:
+                    print("Path of the video with zero error: ",record.path)
+                    exit()
+                dat = torch.from_numpy(dat).permute(3,0,1,2)
 
             return process_data, dat, record.label
 

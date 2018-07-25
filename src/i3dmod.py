@@ -22,6 +22,7 @@ class modI3D(torch.nn.Module):
         self.mean = mean
         self.random = random
 
+
         # Have to be common
         self.ft = args.ft
 
@@ -78,6 +79,11 @@ class modI3D(torch.nn.Module):
         if self.weights == 'rgb':
             print("Overriding the provided option for mean as using rgb weights [Can't transform weights from 3 dim space]")
             self.mean = True
+
+        if self.load == False:
+            self.random = True
+            self.mean = False
+            # if we don't do this, we'll simply get meaned weights, which defeats the point
 
         if self.transform:
             # without calling this the weights won't adapt
@@ -256,7 +262,7 @@ class TwoStream(torch.nn.Module):
         super(TwoStream, self).__init__()
 
         self.stream1 = modI3D(modality=args.modality, wts=args.wts, dog=args.dog, load=args.load, mean=args.mean, random=args.random)
-        self.stream2 = modI3D(modality='rgb', wts='rgb', dog=args.dog2, load=True, random=False)
+        self.stream2 = modI3D(modality=args.mod2, wts='rgb', dog=args.dog2, load=args.load2, random=False)
         self.softmax = torch.nn.Softmax(1)
 
     def forward(self, input1, input2):
